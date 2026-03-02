@@ -12,10 +12,32 @@ case "$input" in
   *) input="$(pwd)/$input" ;;
 esac
 
+# Force BDInfo to scan one explicit BDMV folder, avoiding parent-folder multi-disc scan
+# that may attempt writing reports beside source media (read-only mounts).
+if [ -d "$input/BDMV" ]; then
+  input="$input/BDMV"
+fi
+
 out_dir="$(mktemp -d)"
 log_file="$(mktemp)"
+bound_input=""
+
+scan_input="$input"
+if [ -d "$input" ]; then
+  bind_dir="$out_dir/source"
+  mkdir -p "$bind_dir"
+  if mount --bind "$input" "$bind_dir" >/dev/null 2>&1; then
+    scan_input="$bind_dir"
+    bound_input="$bind_dir"
+  elif ln -s "$input" "$bind_dir/link" >/dev/null 2>&1; then
+    scan_input="$bind_dir/link"
+  fi
+fi
 
 cleanup() {
+  if [ -n "$bound_input" ]; then
+    umount "$bound_input" >/dev/null 2>&1 || true
+  fi
   rm -rf "$out_dir" "$log_file"
 }
 trap cleanup EXIT
@@ -34,7 +56,7 @@ report_name="bdinfo.txt"
 report_path="$out_dir/$report_name"
 
 # shellcheck disable=SC2086
-if ! (cd "$out_dir" && "$bdinfo_bin" -p "$input" -o "$report_name" $args) >"$log_file" 2>&1; then
+if ! (cd "$out_dir" && "$bdinfo_bin" -p "$scan_input" -o "$report_name" $args) >"$log_file" 2>&1; then
   cat "$log_file" >&2
   exit 1
 fi
