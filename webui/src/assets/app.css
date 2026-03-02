@@ -119,12 +119,11 @@ input[type="text"] {
 }
 
 .path-picker {
-  position: relative;
   display: grid;
   gap: 10px;
 }
 
-.path-input {
+.path-selected {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -134,13 +133,14 @@ input[type="text"] {
   background: rgba(255, 255, 255, 0.92);
 }
 
-.path-input input[type="text"] {
+.path-selected input[type="text"] {
   border: none;
   padding: 4px 0;
   background: transparent;
   flex: 1;
   font-size: 0.95rem;
   outline: none;
+  color: var(--ink);
 }
 
 .path-icon {
@@ -148,84 +148,105 @@ input[type="text"] {
   opacity: 0.65;
 }
 
-.path-clear {
-  border: none;
-  background: rgba(47, 111, 109, 0.12);
-  color: var(--accent);
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: none;
-  padding: 0;
-  font-size: 1.1rem;
-}
-
-.path-clear:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.path-hint {
+.path-actions {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.85rem;
-  color: var(--muted);
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
-.path-meta {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.path-suggestions {
-  position: absolute;
-  z-index: 10;
-  left: 0;
-  right: 0;
-  top: calc(100% + 6px);
-  background: #ffffff;
-  border: 1px solid rgba(33, 50, 60, 0.12);
-  border-radius: 14px;
-  box-shadow: var(--shadow);
-  max-height: 260px;
-  overflow: auto;
-  padding: 6px;
-}
-
-.suggestion {
-  padding: 8px 10px;
-  border-radius: 10px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  color: var(--ink);
-  line-height: 1.3;
-}
-
-.suggestion:hover,
-.suggestion.active {
-  background: rgba(47, 111, 109, 0.12);
-}
-
-.suggestion.empty {
+.path-hint {
+  font-size: 0.85rem;
   color: var(--muted);
-  cursor: default;
-}
-
-.suggestion .match {
-  color: var(--accent-2);
-  font-weight: 600;
+  line-height: 1.4;
 }
 
 .hint {
   margin: 0;
   font-size: 0.85rem;
   color: var(--muted);
+}
+
+.browser {
+  border: 1px solid rgba(33, 50, 60, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.95);
+  overflow: hidden;
+}
+
+.browser-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(47, 111, 109, 0.06);
+  border-bottom: 1px solid rgba(33, 50, 60, 0.1);
+  flex-wrap: wrap;
+}
+
+.browser-current {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.browser-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.browser-error {
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  color: #8f2f2f;
+  background: rgba(207, 80, 80, 0.08);
+  border-bottom: 1px solid rgba(207, 80, 80, 0.2);
+}
+
+.browser-list {
+  padding: 8px;
+  max-height: 310px;
+  overflow: auto;
+  display: grid;
+  gap: 6px;
+}
+
+.browser-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+
+.browser-row:not(.empty):hover {
+  background: rgba(47, 111, 109, 0.08);
+}
+
+.browser-row.empty {
+  color: var(--muted);
+  justify-content: flex-start;
+}
+
+.browser-row-name {
+  font-size: 0.9rem;
+  word-break: break-all;
+}
+
+.browser-row-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.browser-row-actions button.ghost,
+.browser-buttons button.ghost,
+.path-actions button.ghost {
+  border-radius: 10px;
+  padding: 7px 11px;
 }
 
 .actions {

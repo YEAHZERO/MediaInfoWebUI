@@ -1,4 +1,4 @@
-﻿<template>
+<template>
     <div class="grain"></div>
     <main class="shell">
         <header class="hero">
@@ -11,51 +11,61 @@
 
         <section class="panel">
             <div class="field">
-                <label for="path">媒体路径</label>
-                <div class="path-picker" @keydown="handleKeydown">
-                    <div class="path-input">
-                        <span class="path-icon">🔎</span>
+                <label for="selected-path">媒体路径</label>
+                <div class="path-picker">
+                    <div class="path-selected">
+                        <span class="path-icon">📁</span>
                         <input
-                            id="path"
+                            id="selected-path"
                             type="text"
-                            placeholder="/media/movie.mkv"
-                            v-model="path"
-                            @input="handleInput"
-                            @focus="handleFocus"
-                            @blur="handleBlur"
-                            autocomplete="off"
+                            :value="path"
+                            placeholder="请选择文件或文件夹"
+                            readonly
                         />
-                        <button
-                            v-if="path.trim() !== ''"
-                            type="button"
-                            class="path-clear"
-                            @click="clearPath"
-                            :disabled="busy"
-                            aria-label="清空路径"
-                        >
-                            ×
-                        </button>
                     </div>
-                    <div class="path-hint">
-                        <span>支持模糊搜索与路径补全（MEDIA_ROOT，默认 /media）。</span>
-                        <span class="path-meta" v-if="filteredSuggestions.length > 0">
-                            匹配 {{ filteredSuggestions.length }} 条
-                        </span>
+                    <div class="path-actions">
+                        <button class="ghost" :disabled="busy" @click="openPicker">选择文件或文件夹</button>
+                        <button class="ghost" :disabled="busy || path.trim() === ''" @click="clearPath">清空路径</button>
                     </div>
-                    <div class="path-suggestions" v-if="showSuggestions">
-                        <div
-                            v-for="(item, index) in filteredSuggestions"
-                            :key="item.value"
-                            class="suggestion"
-                            :class="{ active: index === activeIndex }"
-                            @mousedown.prevent="selectSuggestion(item.value)"
-                        >
-                            <span v-for="(segment, segIndex) in item.segments" :key="segIndex" :class="{ match: segment.match }">
-                                {{ segment.text }}
-                            </span>
+                    <div class="path-hint">选择明确的媒体文件时，会直接按该文件进行分析。</div>
+                    <div class="browser" v-if="pickerOpen">
+                        <div class="browser-toolbar">
+                            <div class="browser-current">{{ browserDir || browserRoot || "加载中..." }}</div>
+                            <div class="browser-buttons">
+                                <button class="ghost" :disabled="busy || browserLoading || isAtRoot" @click="navigateUp">上一级</button>
+                                <button class="ghost" :disabled="busy || browserLoading" @click="refreshBrowser">刷新</button>
+                                <button class="ghost" :disabled="busy" @click="closePicker">关闭</button>
+                            </div>
                         </div>
-                        <div v-if="filteredSuggestions.length === 0" class="suggestion empty">
-                            没有匹配的路径
+                        <div class="browser-error" v-if="browserError !== ''">
+                            {{ browserError }}
+                        </div>
+                        <div class="browser-list">
+                            <div class="browser-row">
+                                <span class="browser-row-name">当前目录</span>
+                                <div class="browser-row-actions">
+                                    <button class="ghost" :disabled="busy || browserLoading || !browserDir" @click="chooseCurrentDir">
+                                        选择此文件夹
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="browser-row empty" v-if="!browserLoading && browserEntries.length === 0">
+                                目录为空
+                            </div>
+                            <div class="browser-row empty" v-if="browserLoading">
+                                加载中...
+                            </div>
+                            <div class="browser-row" v-for="entry in browserEntries" :key="entry.path">
+                                <span class="browser-row-name">{{ entry.name }}</span>
+                                <div class="browser-row-actions">
+                                    <button class="ghost" v-if="entry.isDir" :disabled="busy || browserLoading" @click="enterDir(entry.path)">
+                                        进入
+                                    </button>
+                                    <button class="ghost" :disabled="busy || browserLoading" @click="choosePath(entry.path)">
+                                        {{ entry.isDir ? "选择文件夹" : "选择文件" }}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -79,7 +89,7 @@
         </section>
 
         <footer class="footer">
-            <p>请输入服务器路径，支持自动补全。</p>
+            <p>从服务器媒体目录中选择文件或文件夹后再执行分析。</p>
         </footer>
     </main>
 </template>
@@ -90,171 +100,92 @@ import { computed, onBeforeUnmount, ref } from "vue";
 const path = ref("");
 const output = ref("就绪。");
 const busy = ref(false);
-const suggestions = ref([]);
 const copyLabel = ref("复制");
-const showSuggestions = ref(false);
-const activeIndex = ref(-1);
 
-let suggestTimer = null;
-let suggestController = null;
-let lastSuggest = null;
-
-const filteredSuggestions = computed(() => {
-    const query = path.value.trim();
-    if (query === "") {
-        return suggestions.value.slice(0, 12).map((value) => ({
-            value,
-            score: 0,
-            segments: [{ text: value, match: false }],
-        }));
-    }
-
-    const items = [];
-    for (const value of suggestions.value) {
-        const positions = matchPositions(value, query);
-        if (!positions) {
-            continue;
-        }
-        items.push({
-            value,
-            score: scoreMatch(positions, value),
-            segments: buildSegments(value, positions),
-        });
-    }
-
-    items.sort((a, b) => {
-        if (b.score !== a.score) {
-            return b.score - a.score;
-        }
-        return a.value.length - b.value.length;
-    });
-    return items.slice(0, 12);
-});
+const pickerOpen = ref(false);
+const browserRoot = ref("");
+const browserDir = ref("");
+const browserEntries = ref([]);
+const browserLoading = ref(false);
+const browserError = ref("");
+let browserController = null;
 
 const hasInput = () => path.value.trim() !== "";
 
-const handleInput = () => {
-    activeIndex.value = -1;
-    showSuggestions.value = true;
-    scheduleSuggest();
-};
-
-const handleFocus = () => {
-    showSuggestions.value = true;
-    scheduleSuggest();
-};
-
-const handleBlur = () => {
-    setTimeout(() => {
-        showSuggestions.value = false;
-        activeIndex.value = -1;
-    }, 120);
-};
-
-const handleKeydown = (event) => {
-    if (!showSuggestions.value) {
-        return;
+const normalizeComparePath = (value) => {
+    if (!value) {
+        return "";
     }
-    const list = filteredSuggestions.value;
-    if (event.key === "ArrowDown") {
-        event.preventDefault();
-        if (list.length === 0) {
-            return;
-        }
-        activeIndex.value = (activeIndex.value + 1) % list.length;
-    } else if (event.key === "ArrowUp") {
-        event.preventDefault();
-        if (list.length === 0) {
-            return;
-        }
-        activeIndex.value = (activeIndex.value - 1 + list.length) % list.length;
-    } else if (event.key === "Enter") {
-        if (activeIndex.value >= 0 && activeIndex.value < list.length) {
-            event.preventDefault();
-            selectSuggestion(list[activeIndex.value].value);
-        }
-    } else if (event.key === "Escape") {
-        showSuggestions.value = false;
-        activeIndex.value = -1;
+    if (value === "/" || value === "\\") {
+        return "/";
     }
+    return value.replace(/\\/g, "/").replace(/\/+$/, "");
 };
+
+const isAtRoot = computed(() => {
+    const root = normalizeComparePath(browserRoot.value);
+    const current = normalizeComparePath(browserDir.value);
+    if (root === "" || current === "") {
+        return false;
+    }
+    return root === current;
+});
 
 const clearPath = () => {
     path.value = "";
-    showSuggestions.value = false;
-    activeIndex.value = -1;
-    suggestions.value = [];
 };
 
-const selectSuggestion = (value) => {
-    path.value = value;
-    showSuggestions.value = false;
-    activeIndex.value = -1;
+const withTrailingSeparator = (value) => {
+    if (value === "") {
+        return "";
+    }
+    if (value.endsWith("/") || value.endsWith("\\")) {
+        return value;
+    }
+    const separator = value.includes("\\") && !value.includes("/") ? "\\" : "/";
+    return `${value}${separator}`;
 };
 
-const matchPositions = (value, query) => {
-    const v = value.toLowerCase();
-    const q = query.toLowerCase();
-    const positions = [];
-    let index = 0;
-    for (const ch of q) {
-        const found = v.indexOf(ch, index);
-        if (found === -1) {
-            return null;
-        }
-        positions.push(found);
-        index = found + 1;
+const cleanPath = (value) => {
+    if (!value) {
+        return "";
     }
-    return positions;
+    if (value === "/" || value === "\\") {
+        return value;
+    }
+    return value.replace(/[\\/]+$/, "");
 };
 
-const scoreMatch = (positions, value) => {
-    if (!positions || positions.length === 0) {
-        return 0;
+const getEntryName = (value) => {
+    const normalized = value.replace(/[\\/]+$/, "");
+    if (normalized === "") {
+        return value;
     }
-    const length = value.length;
-    let score = positions.length;
-    for (let i = 1; i < positions.length; i++) {
-        if (positions[i] === positions[i - 1] + 1) {
-            score += 3;
-        } else {
-            score += 1;
-        }
-    }
-    for (const pos of positions) {
-        if (pos === 0) {
-            score += 3;
-        } else {
-            const prev = pos - 1;
-            if (prev >= 0 && prev < length && isBoundary(value[prev])) {
-                score += 2;
-            }
-        }
-    }
-    score += Math.max(0, 30 - positions[0]);
-    return score;
+    const parts = normalized.split(/[\\/]/);
+    return parts[parts.length - 1] || normalized;
 };
 
-const isBoundary = (ch) => ch === "/" || ch === "\\" || ch === "_" || ch === "-" || ch === " ";
-
-const buildSegments = (value, positions) => {
-    const segments = [];
-    const posSet = new Set(positions);
-    let current = "";
-    let currentMatch = posSet.has(0);
-    for (let i = 0; i < value.length; i++) {
-        const isMatch = posSet.has(i);
-        if (isMatch !== currentMatch && current !== "") {
-            segments.push({ text: current, match: currentMatch });
-            current = "";
+const buildEntries = (items) => {
+    const result = [];
+    for (const raw of items) {
+        if (typeof raw !== "string" || raw.trim() === "") {
+            continue;
         }
-        currentMatch = isMatch;
-        current += value[i];
+        const isDir = raw.endsWith("/") || raw.endsWith("\\");
+        const clean = cleanPath(raw);
+        result.push({
+            path: clean,
+            name: getEntryName(raw),
+            isDir,
+        });
     }
-    if (current !== "") {
-        segments.push({ text: current, match: currentMatch });
-    }
-    return segments;
+    result.sort((a, b) => {
+        if (a.isDir !== b.isDir) {
+            return a.isDir ? -1 : 1;
+        }
+        return a.name.localeCompare(b.name, "zh-CN");
+    });
+    return result;
 };
 
 const setBusy = (isBusy, label) => {
@@ -272,44 +203,125 @@ const errorOutput = (message) => {
     output.value = `错误：${message}`;
 };
 
-const scheduleSuggest = () => {
-    if (suggestTimer) {
-        clearTimeout(suggestTimer);
+const fetchDirectory = async (prefix) => {
+    if (browserController) {
+        browserController.abort();
     }
-    suggestTimer = setTimeout(() => {
-        suggestPaths(path.value.trim());
-    }, 200);
+    browserController = new AbortController();
+
+    const url = new URL("/api/path", window.location.origin);
+    if (prefix !== "") {
+        url.searchParams.set("prefix", prefix);
+    }
+
+    const res = await fetch(url.toString(), { signal: browserController.signal });
+    const data = await res.json();
+    if (!res.ok || !data.ok || !Array.isArray(data.items)) {
+        throw new Error(data.error || "读取路径失败。");
+    }
+    return data;
 };
 
-const suggestPaths = async (prefix) => {
-    if (prefix === lastSuggest) {
-        return;
-    }
-    lastSuggest = prefix;
-    if (suggestController) {
-        suggestController.abort();
-    }
-    suggestController = new AbortController();
-
+const loadDirectory = async (dir) => {
+    browserLoading.value = true;
+    browserError.value = "";
     try {
-        const url = new URL("/api/path", window.location.origin);
-        if (prefix !== "") {
-            url.searchParams.set("prefix", prefix);
+        const prefix = dir ? withTrailingSeparator(dir) : "";
+        const data = await fetchDirectory(prefix);
+        if (typeof data.root === "string" && data.root !== "") {
+            browserRoot.value = cleanPath(data.root);
         }
-        const res = await fetch(url.toString(), { signal: suggestController.signal });
-        if (!res.ok) {
-            return;
+        browserEntries.value = buildEntries(data.items);
+        if (dir && dir !== "") {
+            browserDir.value = cleanPath(dir);
+        } else if (browserRoot.value !== "") {
+            browserDir.value = browserRoot.value;
         }
-        const data = await res.json();
-        if (!data.ok || !Array.isArray(data.items)) {
-            return;
-        }
-        suggestions.value = data.items;
     } catch (err) {
         if (err && err.name === "AbortError") {
             return;
         }
+        browserError.value = err && err.message ? err.message : "读取路径失败。";
+        browserEntries.value = [];
+    } finally {
+        browserLoading.value = false;
     }
+};
+
+const parentDirectory = (dir) => {
+    const normalized = cleanPath(dir);
+    if (normalized === "" || normalized === "/") {
+        return normalized;
+    }
+    const slash = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
+    if (slash <= 0) {
+        return browserRoot.value || normalized;
+    }
+    return normalized.slice(0, slash);
+};
+
+const openPicker = async () => {
+    pickerOpen.value = true;
+    let target = browserDir.value || browserRoot.value;
+    try {
+        const selected = path.value.trim();
+        if (selected !== "") {
+            const data = await fetchDirectory(selected);
+            if (typeof data.root === "string" && data.root !== "") {
+                browserRoot.value = cleanPath(data.root);
+            }
+            if (data.ok) {
+                const cleaned = cleanPath(selected);
+                const hasDirSelf = data.items.some((item) => item === `${cleaned}/` || item === `${cleaned}\\`);
+                target = hasDirSelf ? cleaned : parentDirectory(cleaned);
+            }
+        }
+    } catch (err) {
+        const selected = path.value.trim();
+        if (selected !== "") {
+            target = parentDirectory(selected);
+        }
+    }
+
+    await loadDirectory(target || "");
+};
+
+const closePicker = () => {
+    pickerOpen.value = false;
+};
+
+const enterDir = async (value) => {
+    await loadDirectory(value);
+};
+
+const choosePath = (value) => {
+    path.value = value;
+    pickerOpen.value = false;
+};
+
+const chooseCurrentDir = () => {
+    if (browserDir.value === "") {
+        return;
+    }
+    path.value = browserDir.value;
+    pickerOpen.value = false;
+};
+
+const navigateUp = async () => {
+    if (!browserDir.value) {
+        await loadDirectory(browserRoot.value || "");
+        return;
+    }
+    let parent = parentDirectory(browserDir.value);
+    const root = normalizeComparePath(browserRoot.value);
+    if (root !== "" && normalizeComparePath(parent).length < root.length) {
+        parent = browserRoot.value;
+    }
+    await loadDirectory(parent || browserRoot.value || "");
+};
+
+const refreshBrowser = async () => {
+    await loadDirectory(browserDir.value || browserRoot.value || "");
 };
 
 const postForm = async (url) => {
@@ -323,7 +335,7 @@ const postForm = async (url) => {
 
 const runInfo = async (url, label) => {
     if (!hasInput()) {
-        errorOutput("请先填写媒体路径。");
+        errorOutput("请先选择媒体路径。");
         return;
     }
     try {
@@ -348,7 +360,7 @@ const runInfo = async (url, label) => {
 
 const downloadShots = async () => {
     if (!hasInput()) {
-        errorOutput("请先填写媒体路径。");
+        errorOutput("请先选择媒体路径。");
         return;
     }
     try {
@@ -420,11 +432,8 @@ const copyOutput = async () => {
 };
 
 onBeforeUnmount(() => {
-    if (suggestTimer) {
-        clearTimeout(suggestTimer);
-    }
-    if (suggestController) {
-        suggestController.abort();
+    if (browserController) {
+        browserController.abort();
     }
 });
 </script>
