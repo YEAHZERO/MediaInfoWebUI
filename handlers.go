@@ -311,29 +311,86 @@ func probeDuration(ctx context.Context, ffprobe, path string) (float64, error) {
 }
 
 func captureShot(ctx context.Context, ffmpeg, path string, seconds float64, outPath string) error {
-    ts := fmt.Sprintf("%.3f", seconds)
+    if seconds < 0 {
+        seconds = 0
+    }
+    ts := formatFFmpegTimestamp(seconds)
     stdout, stderr, err := runCommand(ctx, ffmpeg,
         "-hide_banner",
         "-loglevel", "error",
         "-y",
         "-ss", ts,
+        "-skip_frame", "nokey",
         "-i", path,
         "-frames:v", "1",
         "-q:v", "2",
         "-an",
         outPath,
     )
-    if err != nil {
-        msg := strings.TrimSpace(stderr)
+    if err == nil {
+        return nil
+    }
+
+    // Fallback: seek from a nearby point then decode a short window to hit the target.
+    const fallbackLead = 5.0
+    pre := seconds - fallbackLead
+    post := fallbackLead
+    if pre < 0 {
+        pre = 0
+        post = seconds
+    }
+    preTS := formatFFmpegTimestamp(pre)
+    postTS := formatFFmpegTimestamp(post)
+
+    stdout2, stderr2, err2 := runCommand(ctx, ffmpeg,
+        "-hide_banner",
+        "-loglevel", "error",
+        "-y",
+        "-ss", preTS,
+        "-i", path,
+        "-ss", postTS,
+        "-t", "1",
+        "-frames:v", "1",
+        "-q:v", "2",
+        "-an",
+        outPath,
+    )
+    if err2 != nil {
+        msg := strings.TrimSpace(stderr2)
         if msg == "" {
-            msg = err.Error()
+            msg = err2.Error()
+        }
+        if strings.TrimSpace(stdout2) != "" {
+            msg += "\n" + strings.TrimSpace(stdout2)
+        }
+        fastMsg := strings.TrimSpace(stderr)
+        if fastMsg == "" {
+            fastMsg = err.Error()
         }
         if strings.TrimSpace(stdout) != "" {
-            msg += "\n" + strings.TrimSpace(stdout)
+            fastMsg += "\n" + strings.TrimSpace(stdout)
         }
-        return fmt.Errorf("ffmpeg failed: %s", msg)
+        return fmt.Errorf("ffmpeg failed after keyframe+fallback attempts: fast=%s ; fallback=%s", fastMsg, msg)
     }
     return nil
+}
+
+func formatFFmpegTimestamp(seconds float64) string {
+    if seconds < 0 {
+        seconds = 0
+    }
+
+    whole := int64(seconds)
+    ms := int64((seconds-float64(whole))*1000 + 0.5)
+    if ms >= 1000 {
+        whole++
+        ms -= 1000
+    }
+
+    h := whole / 3600
+    m := (whole % 3600) / 60
+    s := whole % 60
+    return fmt.Sprintf("%02d:%02d:%02d.%03d", h, m, s, ms)
 }
 
 func screenshotConcurrency() int {
