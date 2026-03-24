@@ -5,6 +5,8 @@
 - 输出 BDInfo 信息
 - 使用 guyuan 截图脚本
 
+![minfo 截图](docs/images/screenshot.png)
+
 ## 部署方式
 
 直接使用已发布镜像 `ghcr.io/mirrorb/minfo:latest`。
