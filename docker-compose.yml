@@ -15,5 +15,5 @@ services:
       WEB_PASSWORD: "${WEB_PASSWORD:-}"
     volumes:
       - /lib/modules:/lib/modules:ro # 程序会自动尝试加载 `udf` 内核模块用于挂载ISO
-      - ${MEDIA_PATH_1:-./test-media}:/media_path1:ro
+      - ${MEDIA_PATH_1:-./test-media}:/media:ro
     restart: unless-stopped

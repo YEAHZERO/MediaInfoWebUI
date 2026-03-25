@@ -16,5 +16,5 @@ services:
     volumes:
       - /lib/modules:/lib/modules:ro
       - .:${PWD:-/opt/minfo}
-      - ${MEDIA_PATH_1:-./test-media}:/media_path1:ro
+      - ${MEDIA_PATH_1:-./test-media}:/media:ro
     restart: unless-stopped
