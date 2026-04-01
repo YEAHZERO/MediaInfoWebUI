@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"path/filepath"
+	"regexp"
+	"strings"
 
 	"minfo/internal/config"
 	"minfo/internal/httpapi/transport"
@@ -47,7 +50,9 @@ func MediaInfoHandler(envKey, fallback string) http.HandlerFunc {
 
 		var lastErr string
 		for _, sourcePath := range candidates {
-			stdout, stderr, err := system.RunCommand(ctx, bin, sourcePath)
+			sourceDir := filepath.Dir(sourcePath)
+			sourceName := filepath.Base(sourcePath)
+			stdout, stderr, err := system.RunCommandInDir(ctx, sourceDir, bin, sourceName)
 			if err != nil {
 				lastErr = system.BestErrorMessage(err, stderr, stdout)
 				continue
@@ -110,6 +115,50 @@ func BDInfoHandler(envKey, fallback string) http.HandlerFunc {
 			return
 		}
 
-		transport.WriteJSON(w, http.StatusOK, transport.InfoResponse{OK: true, Output: system.CombineCommandOutput(stdout, stderr)})
+		output := system.CombineCommandOutput(stdout, stderr)
+		if shouldExtractBDInfoCode(r.FormValue("bdinfo_mode")) {
+			output = extractBDInfoCodeBlock(output)
+		}
+
+		transport.WriteJSON(w, http.StatusOK, transport.InfoResponse{OK: true, Output: output})
 	}
+}
+
+func shouldExtractBDInfoCode(mode string) bool {
+	return strings.TrimSpace(strings.ToLower(mode)) != "full"
+}
+
+func extractBDInfoCodeBlock(output string) string {
+	matches := regexp.MustCompile(`(?is)\[code\](.*?)\[/code\]`).FindAllStringSubmatch(output, -1)
+	if len(matches) == 0 {
+		return output
+	}
+
+	best := ""
+	bestScore := -1
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+
+		block := strings.TrimSpace(match[1])
+		if block == "" {
+			continue
+		}
+
+		score := len(block)
+		if strings.Contains(strings.ToUpper(block), "DISC INFO:") {
+			score += 1_000_000
+		}
+
+		if score > bestScore {
+			best = block
+			bestScore = score
+		}
+	}
+
+	if best == "" {
+		return output
+	}
+	return best
 }

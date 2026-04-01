@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -16,17 +17,34 @@ import (
 	"minfo/internal/system"
 )
 
-const screenshotScriptDir = "/opt/minfo/scripts"
-const screenshotCount = 4
+const screenshotScriptDir = "/usr/local/share/minfo/scripts"
+
+const (
+	defaultScreenshotCount = 4
+	minScreenshotCount     = 1
+	maxScreenshotCount     = 10
+)
 
 const (
 	ModeZip   = "zip"
 	ModeLinks = "links"
 
-	VariantPNG  = "png"
-	VariantJPG  = "jpg"
-	VariantFast = "fast"
+	VariantPNG = "png"
+	VariantJPG = "jpg"
+
+	SubtitleModeAuto = "auto"
+	SubtitleModeOff  = "off"
 )
+
+type ScriptResult struct {
+	Files []string
+	Logs  string
+}
+
+type UploadResult struct {
+	Output string
+	Logs   string
+}
 
 func NormalizeMode(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
@@ -41,30 +59,51 @@ func NormalizeVariant(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case VariantJPG:
 		return VariantJPG
-	case VariantFast:
-		return VariantFast
 	default:
 		return VariantPNG
 	}
 }
 
-func screenshotVariantArgs(variant string) []string {
-	switch variant {
-	case VariantJPG:
-		return []string{"-jpg"}
-	case VariantFast:
-		return []string{"-fast"}
+func NormalizeSubtitleMode(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case SubtitleModeOff, "none", "nosub", "false", "0":
+		return SubtitleModeOff
 	default:
-		return nil
+		return SubtitleModeAuto
 	}
+}
+
+func NormalizeCount(raw string) int {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return defaultScreenshotCount
+	}
+
+	count, err := strconv.Atoi(value)
+	if err != nil {
+		return defaultScreenshotCount
+	}
+	switch {
+	case count < minScreenshotCount:
+		return minScreenshotCount
+	case count > maxScreenshotCount:
+		return maxScreenshotCount
+	default:
+		return count
+	}
+}
+
+func subtitleModeArgs(mode string) []string {
+	if mode == SubtitleModeOff {
+		return []string{"-nosub"}
+	}
+	return nil
 }
 
 func screenshotScriptName(variant string) string {
 	switch variant {
 	case VariantJPG:
 		return "screenshots_jpg.sh"
-	case VariantFast:
-		return "screenshots_fast.sh"
 	default:
 		return "screenshots.sh"
 	}
@@ -87,49 +126,75 @@ func resolveScript(envKey, fallbackName string) (string, error) {
 	if err == nil && !info.IsDir() {
 		return candidate, nil
 	}
-	return "", fmt.Errorf("%s not found in %s; set %s to override", fallbackName, screenshotScriptDir, envKey)
+
+	return "", fmt.Errorf("%s not found in %s; rebuild the image or set %s to override", fallbackName, screenshotScriptDir, envKey)
 }
 
-func RunScript(ctx context.Context, inputPath, outputDir, variant string) ([]string, error) {
+func RunScript(ctx context.Context, inputPath, outputDir, variant, subtitleMode string, count int) ([]string, error) {
+	result, err := RunScriptWithLogs(ctx, inputPath, outputDir, variant, subtitleMode, count)
+	if err != nil {
+		return nil, err
+	}
+	return result.Files, nil
+}
+
+func RunScriptWithLogs(ctx context.Context, inputPath, outputDir, variant, subtitleMode string, count int) (ScriptResult, error) {
 	scriptPath, err := resolveScript("SCREENSHOT_SCRIPT", screenshotScriptName(variant))
 	if err != nil {
-		return nil, err
+		return ScriptResult{}, err
 	}
 
-	timestamps, err := randomScreenshotTimestamps(ctx, inputPath, screenshotCount)
+	sourcePath, cleanup, err := media.ResolveScreenshotSource(ctx, inputPath)
 	if err != nil {
-		return nil, err
+		return ScriptResult{}, err
+	}
+	defer cleanup()
+
+	timestamps, err := randomScreenshotTimestampsForSource(ctx, sourcePath, count)
+	if err != nil {
+		return ScriptResult{}, err
 	}
 
-	args := append([]string{scriptPath, inputPath, outputDir}, timestamps...)
+	args := append([]string{scriptPath}, subtitleModeArgs(subtitleMode)...)
+	args = append(args, sourcePath, outputDir)
+	args = append(args, timestamps...)
 	stdout, stderr, err := system.RunCommand(ctx, "bash", args...)
+	logs := system.CombineCommandOutput(stdout, stderr)
 	if err != nil {
-		return nil, fmt.Errorf("screenshot generation failed: %s", system.BestErrorMessage(err, stderr, stdout))
+		return ScriptResult{Logs: logs}, fmt.Errorf("screenshot generation failed: %s", system.BestErrorMessage(err, stderr, stdout))
 	}
 
 	files, err := listScreenshotFiles(outputDir)
 	if err != nil {
-		return nil, err
+		return ScriptResult{Logs: logs}, err
 	}
-	return files, nil
+	return ScriptResult{Files: files, Logs: logs}, nil
 }
 
-func RunUpload(ctx context.Context, inputPath, outputDir, variant string) (string, error) {
-	autoScript, err := resolveScript("SCREENSHOT_AUTO_SCRIPT", "AutoScreenshot.sh")
+func RunUpload(ctx context.Context, inputPath, outputDir, variant, subtitleMode string, count int) (string, error) {
+	result, err := RunUploadWithLogs(ctx, inputPath, outputDir, variant, subtitleMode, count)
 	if err != nil {
 		return "", err
 	}
+	return result.Output, nil
+}
 
-	timestamps, err := randomScreenshotTimestamps(ctx, inputPath, screenshotCount)
+func RunUploadWithLogs(ctx context.Context, inputPath, outputDir, variant, subtitleMode string, count int) (UploadResult, error) {
+	uploadScript, err := resolveScript("SCREENSHOT_UPLOAD_SCRIPT", "PixhostUpload.sh")
 	if err != nil {
-		return "", err
+		return UploadResult{}, err
 	}
 
-	args := append(screenshotVariantArgs(variant), inputPath, outputDir)
-	args = append(args, timestamps...)
-	stdout, stderr, err := system.RunCommand(ctx, "bash", append([]string{autoScript}, args...)...)
+	screenshotResult, err := RunScriptWithLogs(ctx, inputPath, outputDir, variant, subtitleMode, count)
 	if err != nil {
-		return "", fmt.Errorf("screenshot upload failed: %s", system.BestErrorMessage(err, stderr, stdout))
+		return UploadResult{Logs: screenshotResult.Logs}, err
+	}
+
+	stdout, stderr, err := system.RunCommand(ctx, "bash", uploadScript, outputDir)
+	uploadLogs := system.CombineCommandOutput(stdout, stderr)
+	logs := strings.TrimSpace(strings.Join(filterNonEmptyStrings(screenshotResult.Logs, uploadLogs), "\n\n"))
+	if err != nil {
+		return UploadResult{Logs: logs}, fmt.Errorf("screenshot upload failed: %s", system.BestErrorMessage(err, stderr, stdout))
 	}
 
 	links := extractDirectLinks(stdout)
@@ -139,28 +204,32 @@ func RunUpload(ctx context.Context, inputPath, outputDir, variant string) (strin
 			output = strings.TrimSpace(stderr)
 		}
 		if output == "" {
-			return "", errors.New("pixhost upload completed but returned no links")
+			return UploadResult{Logs: logs}, errors.New("pixhost upload completed but returned no links")
 		}
-		return output, nil
+		return UploadResult{Output: output, Logs: logs}, nil
 	}
-	return strings.Join(links, "\n"), nil
+	return UploadResult{Output: strings.Join(links, "\n"), Logs: logs}, nil
 }
 
 func randomScreenshotTimestamps(ctx context.Context, inputPath string, count int) ([]string, error) {
-	if count <= 0 {
-		count = screenshotCount
-	}
-
-	ffprobe, err := system.ResolveBin("FFPROBE_BIN", "ffprobe")
-	if err != nil {
-		return nil, err
-	}
+	count = normalizeCountValue(count)
 
 	sourcePath, cleanup, err := media.ResolveScreenshotSource(ctx, inputPath)
 	if err != nil {
 		return nil, err
 	}
 	defer cleanup()
+
+	return randomScreenshotTimestampsForSource(ctx, sourcePath, count)
+}
+
+func randomScreenshotTimestampsForSource(ctx context.Context, sourcePath string, count int) ([]string, error) {
+	count = normalizeCountValue(count)
+
+	ffprobe, err := system.ResolveBin("FFPROBE_BIN", "ffprobe")
+	if err != nil {
+		return nil, err
+	}
 
 	duration, err := probeMediaDuration(ctx, ffprobe, sourcePath)
 	if err != nil {
@@ -176,27 +245,73 @@ func randomScreenshotTimestamps(ctx context.Context, inputPath string, count int
 }
 
 func probeMediaDuration(ctx context.Context, ffprobe, path string) (float64, error) {
-	stdout, stderr, err := system.RunCommand(ctx, ffprobe,
+	stdout, stderr, err := runFFprobeDuration(ctx, ffprobe, path, "format=duration")
+	if err != nil {
+		return 0, fmt.Errorf("ffprobe format duration probe failed: %s", system.BestErrorMessage(err, stderr, stdout))
+	}
+
+	duration, parseErr := parseDurationOutput(stdout)
+	if parseErr == nil {
+		return duration, nil
+	}
+
+	stdout, stderr, err = runFFprobeDuration(ctx, ffprobe, path, "stream=duration")
+	if err != nil {
+		return 0, fmt.Errorf("ffprobe format duration unavailable (%v); stream duration probe failed: %s", parseErr, system.BestErrorMessage(err, stderr, stdout))
+	}
+
+	duration, streamErr := parseDurationOutput(stdout)
+	if streamErr == nil {
+		return duration, nil
+	}
+
+	return 0, fmt.Errorf("ffprobe returned unusable duration: format probe (%v); stream probe (%v)", parseErr, streamErr)
+}
+
+func runFFprobeDuration(ctx context.Context, ffprobe, path, entries string) (string, string, error) {
+	return system.RunCommand(ctx, ffprobe,
 		"-v", "error",
-		"-show_entries", "format=duration",
+		"-show_entries", entries,
 		"-of", "default=noprint_wrappers=1:nokey=1",
 		path,
 	)
-	if err != nil {
-		return 0, fmt.Errorf("ffprobe failed: %s", system.BestErrorMessage(err, stderr, stdout))
+}
+
+func parseDurationOutput(output string) (float64, error) {
+	lines := strings.Split(output, "\n")
+	best := 0.0
+	found := false
+	invalid := make([]string, 0, len(lines))
+
+	for _, line := range lines {
+		value := strings.TrimSpace(line)
+		if value == "" {
+			continue
+		}
+
+		duration, err := strconv.ParseFloat(value, 64)
+		if err != nil || math.IsNaN(duration) || math.IsInf(duration, 0) || duration <= 0 {
+			invalid = append(invalid, value)
+			continue
+		}
+
+		if !found || duration > best {
+			best = duration
+			found = true
+		}
 	}
 
-	value := strings.TrimSpace(stdout)
-	if value == "" {
+	if found {
+		return best, nil
+	}
+	if len(invalid) == 0 {
 		return 0, errors.New("ffprobe returned empty duration")
 	}
-	return strconv.ParseFloat(value, 64)
+	return 0, fmt.Errorf("ffprobe returned invalid duration values: %s", strings.Join(invalid, ", "))
 }
 
 func buildRandomTimestampSeconds(duration float64, count int) []int {
-	if count <= 0 {
-		count = screenshotCount
-	}
+	count = normalizeCountValue(count)
 
 	start := 0.0
 	end := duration
@@ -256,6 +371,19 @@ func buildRandomTimestampSeconds(duration float64, count int) []int {
 	return values
 }
 
+func normalizeCountValue(count int) int {
+	switch {
+	case count == 0:
+		return defaultScreenshotCount
+	case count < minScreenshotCount:
+		return minScreenshotCount
+	case count > maxScreenshotCount:
+		return maxScreenshotCount
+	default:
+		return count
+	}
+}
+
 func formatScriptTimestamp(totalSeconds int) string {
 	if totalSeconds < 0 {
 		totalSeconds = 0
@@ -312,4 +440,16 @@ func extractDirectLinks(output string) []string {
 		links = append(links, line)
 	}
 	return links
+}
+
+func filterNonEmptyStrings(values ...string) []string {
+	filtered := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		filtered = append(filtered, value)
+	}
+	return filtered
 }

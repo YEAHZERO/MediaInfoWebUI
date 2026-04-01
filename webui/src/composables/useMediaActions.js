@@ -1,38 +1,115 @@
-import { ref } from "vue";
-import { requestInfo, requestScreenshotLinks, requestScreenshotZip } from "../api/media";
-import { copyText, saveBlob } from "../utils/output";
+import { computed, ref, watch } from "vue";
+import { prepareScreenshotZipDownload, requestInfo, requestScreenshotLinks, startPreparedDownload } from "../api/media";
+import { buildBBCodeText, buildCopyText, buildLinkText, copyText, extractDirectLinks, mergeOutputLinks } from "../utils/output";
 
-export function useMediaActions(path, screenshotVariant, hasInput) {
-    const output = ref("就绪。");
+export function useMediaActions(path, screenshotVariant, screenshotCount, screenshotSubtitleMode, hasInput) {
+    const outputText = ref("");
+    const linkItems = ref([]);
     const busy = ref(false);
-    const copyLabel = ref("复制");
+    const activeAction = ref("");
+    const activePanel = ref("");
+    const statusMessage = ref("");
+    const linkStatusText = ref("");
+    const copyOutputStatus = ref("");
+    const copyLinksStatus = ref("");
+    const copyBBCodeStatus = ref("");
+    const noticeText = ref("");
+    let noticeTimer = null;
+    const copyOutputLabel = computed(() => copyOutputStatus.value || "复制输出");
+    const copyLinksLabel = computed(() => copyLinksStatus.value || "复制链接");
+    const copyBBCodeLabel = computed(() => copyBBCodeStatus.value || "复制 BBCode");
+    const showOutputPanel = computed(() => activePanel.value === "output" && (busy.value || statusMessage.value !== "" || outputText.value !== ""));
+    const showImageLinksPanel = computed(() => activePanel.value === "links" && (busy.value || linkStatusText.value !== "" || linkItems.value.length > 0));
 
-    const setBusy = (isBusy, label) => {
+    const setBusy = (isBusy, label, action = "") => {
         busy.value = isBusy;
-        if (label) {
-            output.value = label;
+        activeAction.value = isBusy ? action : "";
+        statusMessage.value = isBusy ? label || "" : "";
+    };
+
+    const setOutputText = (text) => {
+        outputText.value = typeof text === "string" ? text : "";
+    };
+
+    const setLinkStatusText = (text) => {
+        linkStatusText.value = typeof text === "string" ? text : "";
+    };
+
+    const clearOutputState = () => {
+        setOutputText("");
+    };
+
+    const clearLinkState = () => {
+        linkItems.value = [];
+        setLinkStatusText("");
+    };
+
+    const hidePanels = () => {
+        activePanel.value = "";
+    };
+
+    const activateOutputPanel = () => {
+        activePanel.value = "output";
+        clearLinkState();
+        clearOutputState();
+    };
+
+    const activateImageLinksPanel = (clearLinks = true) => {
+        activePanel.value = "links";
+        clearOutputState();
+        if (clearLinks) {
+            clearLinkState();
         }
     };
 
-    const appendOutput = (text) => {
-        output.value = text;
+    const showNotice = (message) => {
+        noticeText.value = typeof message === "string" ? message : "";
+        if (noticeTimer) {
+            clearTimeout(noticeTimer);
+        }
+        noticeTimer = setTimeout(() => {
+            noticeText.value = "";
+            noticeTimer = null;
+        }, 2400);
     };
 
-    const errorOutput = (message) => {
-        output.value = `错误：${message}`;
+    const logScreenshotLogs = (label, logs, isError = false) => {
+        if (typeof logs !== "string" || logs.trim() === "") {
+            return;
+        }
+        const prefix = `[screenshots] ${label}`;
+        if (isError) {
+            console.error(prefix);
+            console.error(logs);
+            return;
+        }
+        console.log(prefix);
+        console.log(logs);
     };
 
-    const runInfo = async (url, label) => {
+    watch(path, (nextValue, previousValue) => {
+        if (normalizeTargetPath(nextValue) === normalizeTargetPath(previousValue)) {
+            return;
+        }
+        clearOutputState();
+        clearLinkState();
+        hidePanels();
+    });
+
+    const runInfo = async (url, label, fields = {}, action = "") => {
         if (!hasInput.value) {
-            errorOutput("请先选择媒体路径。");
+            showNotice("请先选择媒体路径。");
             return;
         }
         try {
-            setBusy(true, `${label} 生成中...`);
-            const data = await requestInfo(path.value.trim(), url);
-            appendOutput(data.output || "没有输出。");
+            activateOutputPanel();
+            setBusy(true, `${label} 生成中...`, action);
+            const data = await requestInfo(path.value.trim(), url, fields);
+            setOutputText(data.output || "没有输出。");
         } catch (err) {
-            errorOutput(err?.message || "请求失败。");
+            clearOutputState();
+            hidePanels();
+            showNotice(err?.message || "请求失败。");
         } finally {
             setBusy(false);
         }
@@ -40,16 +117,26 @@ export function useMediaActions(path, screenshotVariant, hasInput) {
 
     const downloadShots = async () => {
         if (!hasInput.value) {
-            errorOutput("请先选择媒体路径。");
+            showNotice("请先选择媒体路径。");
             return;
         }
         try {
-            setBusy(true, "正在生成截图...");
-            const blob = await requestScreenshotZip(path.value.trim(), screenshotVariant.value);
-            saveBlob(blob, "screenshots.zip");
-            appendOutput("截图已下载为 screenshots.zip。");
+            activateOutputPanel();
+            setBusy(true, "正在生成截图...", "download-shots");
+            const { downloadURL, logs } = await prepareScreenshotZipDownload(
+                path.value.trim(),
+                screenshotVariant.value,
+                screenshotSubtitleMode.value,
+                screenshotCount.value,
+            );
+            logScreenshotLogs("download", logs);
+            startPreparedDownload(downloadURL);
+            setOutputText("截图已生成。");
         } catch (err) {
-            errorOutput(err?.message || "截图请求失败。");
+            logScreenshotLogs("download failed", err?.logs, true);
+            clearOutputState();
+            hidePanels();
+            showNotice(err?.message || "截图请求失败。");
         } finally {
             setBusy(false);
         }
@@ -57,50 +144,203 @@ export function useMediaActions(path, screenshotVariant, hasInput) {
 
     const outputShotLinks = async () => {
         if (!hasInput.value) {
-            errorOutput("请先选择媒体路径。");
+            showNotice("请先选择媒体路径。");
             return;
         }
         try {
-            setBusy(true, "正在生成截图并上传...");
-            const data = await requestScreenshotLinks(path.value.trim(), screenshotVariant.value);
-            appendOutput(data.output || "没有返回图床链接。");
+            activateImageLinksPanel(true);
+            setBusy(true, "", "output-links");
+            setLinkStatusText("正在生成截图并上传...");
+            const data = await requestScreenshotLinks(path.value.trim(), screenshotVariant.value, screenshotSubtitleMode.value, screenshotCount.value);
+            logScreenshotLogs("upload", data.logs);
+            const output = data.output || "";
+            const links = extractDirectLinks(output);
+
+            if (links.length > 0) {
+                const { items, addedCount, duplicateCount } = mergeOutputLinks([], links);
+                linkItems.value = items;
+
+                if (addedCount === 0) {
+                    setLinkStatusText("本次没有生成可用图床链接。");
+                } else if (duplicateCount > 0) {
+                    setLinkStatusText(`已生成 ${addedCount} 条图床链接，忽略 ${duplicateCount} 条重复链接。`);
+                } else {
+                    setLinkStatusText(`已生成 ${addedCount} 条图床链接。`);
+                }
+                return;
+            }
+
+            setLinkStatusText(output || "没有返回图床链接。");
         } catch (err) {
-            errorOutput(err?.message || "图床链接请求失败。");
+            logScreenshotLogs("upload failed", err?.logs, true);
+            clearLinkState();
+            hidePanels();
+            showNotice(err?.message || "图床链接请求失败。");
         } finally {
             setBusy(false);
         }
     };
 
-    const clearOutput = () => {
+    const appendShotLinks = async () => {
+        if (!hasInput.value) {
+            showNotice("请先选择媒体路径。");
+            return;
+        }
+        const previousStatusText = linkStatusText.value;
+        try {
+            activateImageLinksPanel(false);
+            setBusy(true);
+            setLinkStatusText("正在生成截图并上传...");
+            const data = await requestScreenshotLinks(path.value.trim(), screenshotVariant.value, screenshotSubtitleMode.value, screenshotCount.value);
+            logScreenshotLogs("upload", data.logs);
+            const output = data.output || "";
+            const links = extractDirectLinks(output);
+
+            if (links.length > 0) {
+                const { items, addedCount, duplicateCount } = mergeOutputLinks(linkItems.value, links);
+                linkItems.value = items;
+
+                if (addedCount === 0) {
+                    setLinkStatusText(`本次没有新增图床链接，当前共 ${linkItems.value.length} 条。`);
+                } else if (duplicateCount > 0) {
+                    setLinkStatusText(`新增 ${addedCount} 条图床链接，忽略 ${duplicateCount} 条重复链接，当前共 ${linkItems.value.length} 条。`);
+                } else {
+                    setLinkStatusText(`新增 ${addedCount} 条图床链接，当前共 ${linkItems.value.length} 条。`);
+                }
+                return;
+            }
+
+            setLinkStatusText(output || "没有返回图床链接。");
+        } catch (err) {
+            logScreenshotLogs("upload failed", err?.logs, true);
+            setLinkStatusText(previousStatusText);
+            showNotice(err?.message || "图床链接请求失败。");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const clearOutputText = () => {
         if (busy.value) {
             return;
         }
-        appendOutput("就绪。");
+        clearOutputState();
+        if (activePanel.value === "output") {
+            hidePanels();
+        }
     };
 
-    const copyOutput = async () => {
-        const text = output.value || "";
+    const clearLinkItems = () => {
+        if (busy.value) {
+            return;
+        }
+        clearLinkState();
+        if (activePanel.value === "links") {
+            hidePanels();
+        }
+    };
+
+    const copyOutputText = async () => {
+        const text = buildCopyText(outputText.value, []);
         if (text.trim() === "") {
-            errorOutput("没有可复制的内容。");
+            showNotice("没有可复制的内容。");
             return;
         }
 
-        await copyText(text);
-        const original = copyLabel.value;
-        copyLabel.value = "已复制";
-        setTimeout(() => {
-            copyLabel.value = original;
-        }, 1200);
+        try {
+            await copyText(text);
+            copyOutputStatus.value = "已复制";
+            setTimeout(() => {
+                copyOutputStatus.value = "";
+            }, 1200);
+        } catch (err) {
+            showNotice(err?.message || "复制失败。");
+        }
+    };
+
+    const copyLinks = async () => {
+        const text = buildLinkText(linkItems.value);
+        if (text.trim() === "") {
+            showNotice("没有可复制的链接。");
+            return;
+        }
+
+        try {
+            await copyText(text);
+            copyLinksStatus.value = "已复制";
+            setTimeout(() => {
+                copyLinksStatus.value = "";
+            }, 1200);
+        } catch (err) {
+            showNotice(err?.message || "复制链接失败。");
+        }
+    };
+
+    const copyBBCode = async () => {
+        const text = buildBBCodeText(linkItems.value);
+        if (text.trim() === "") {
+            showNotice("没有可复制的 BBCode。");
+            return;
+        }
+
+        try {
+            await copyText(text);
+            copyBBCodeStatus.value = "已复制";
+            setTimeout(() => {
+                copyBBCodeStatus.value = "";
+            }, 1200);
+        } catch (err) {
+            showNotice(err?.message || "复制 BBCode 失败。");
+        }
+    };
+
+    const removeLink = (id) => {
+        if (busy.value) {
+            return;
+        }
+
+        const nextItems = linkItems.value.filter((item) => item.id !== id);
+        if (nextItems.length === linkItems.value.length) {
+            return;
+        }
+
+        linkItems.value = nextItems;
+        if (nextItems.length === 0) {
+            clearLinkState();
+            if (activePanel.value === "links") {
+                hidePanels();
+            }
+            return;
+        }
+        setLinkStatusText(`已移除 1 条图床链接，当前共 ${nextItems.length} 条。`);
     };
 
     return {
-        output,
+        outputText,
+        linkItems,
         busy,
-        copyLabel,
+        activeAction,
+        noticeText,
+        linkStatusText,
+        copyOutputLabel,
+        copyLinksLabel,
+        copyBBCodeLabel,
+        statusMessage,
+        showOutputPanel,
+        showImageLinksPanel,
         runInfo,
         downloadShots,
         outputShotLinks,
-        clearOutput,
-        copyOutput,
+        appendShotLinks,
+        clearOutputText,
+        clearLinkItems,
+        copyOutputText,
+        copyLinks,
+        copyBBCode,
+        removeLink,
     };
+}
+
+function normalizeTargetPath(value) {
+    return typeof value === "string" ? value.trim() : "";
 }

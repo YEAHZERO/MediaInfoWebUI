@@ -1,11 +1,6 @@
 ARG BDINFO_REPO=https://github.com/mirrorb/BDInfo.git
 ARG BDINFO_REF=master
 ARG BDINFO_CSPROJ=BDInfo.Core/BDInfo/BDInfo.csproj
-ARG SCREENSHOT_AUTO_URL=https://raw.githubusercontent.com/mirrorb/Seedbox/refs/heads/main/AutoScreenshot.sh
-ARG SCREENSHOT_UPLOAD_URL=https://raw.githubusercontent.com/mirrorb/Seedbox/refs/heads/main/PixhostUpload.sh
-ARG SCREENSHOT_PNG_URL=https://raw.githubusercontent.com/mirrorb/Seedbox/refs/heads/main/screenshots.sh
-ARG SCREENSHOT_FAST_URL=https://raw.githubusercontent.com/mirrorb/Seedbox/refs/heads/main/screenshots_fast.sh
-ARG SCREENSHOT_JPG_URL=https://raw.githubusercontent.com/mirrorb/Seedbox/refs/heads/main/screenshots_jpg.sh
 ARG GO_VERSION=1.26.1
 
 # 构建 WebUI
@@ -39,21 +34,18 @@ RUN apk add --no-cache git ca-certificates
 RUN git clone --depth 1 --branch "$BDINFO_REF" "$BDINFO_REPO" /src/bdinfo
 WORKDIR /src/bdinfo
 RUN set -eux; \
-    # 匹配 Alpine (musl) 架构的 RID
     case "$TARGETARCH" in \
         amd64) rid="linux-musl-x64" ;; \
         arm64) rid="linux-musl-arm64" ;; \
         *) echo "unsupported TARGETARCH=$TARGETARCH" >&2; exit 1 ;; \
     esac; \
     dotnet restore "$BDINFO_CSPROJ"; \
-    # 编译单文件版 (禁用 Trim 以防命令行反射报错)
     dotnet publish "$BDINFO_CSPROJ" -c Release -r "$rid" --self-contained true \
         -p:PublishSingleFile=true \
         -p:EnableCompressionInSingleFile=true \
         -p:DebugType=None \
         -p:DebugSymbols=false \
         -o /out/bdinfo; \
-    # 提取生成的二进制文件
     exe=""; \
     for f in /out/bdinfo/*; do \
         if [ -f "$f" ] && [ -x "$f" ] &&[ "${f##*.}" != "dll" ] && [ "${f##*.}" != "json" ] &&[ "${f##*.}" != "pdb" ]; then \
@@ -68,18 +60,23 @@ RUN set -eux; \
     chmod +x /out/bdinfo/BDInfo; \
     find /out/bdinfo -type f \( -name '*.pdb' -o -name '*.xml' -o -name '*.dbg' \) -delete
 
+# 构建 BDMV 字幕探测 helper
+FROM --platform=$BUILDPLATFORM alpine:3.19 AS bluray-helper-build
+RUN apk add --no-cache build-base
+WORKDIR /src
+COPY tools/bdmv_subtitle_probe.c ./tools/bdmv_subtitle_probe.c
+RUN mkdir -p /out && \
+    cc -O2 -Wall -Wextra -std=c11 ./tools/bdmv_subtitle_probe.c -o /out/bdsub
+
 # 最终运行环境 (Alpine)
 FROM alpine:3.19 AS runtime
-ARG SCREENSHOT_AUTO_URL
-ARG SCREENSHOT_UPLOAD_URL
-ARG SCREENSHOT_PNG_URL
-ARG SCREENSHOT_FAST_URL
-ARG SCREENSHOT_JPG_URL
 RUN apk add --no-cache \
     ca-certificates \
     curl \
     ffmpeg \
     mediainfo \
+    fontconfig \
+    font-noto-cjk \
     kmod \
     libgdiplus \
     findutils \
@@ -93,25 +90,18 @@ RUN apk add --no-cache \
     file \
     coreutils
 
+COPY scripts/seedbox/ /usr/local/share/minfo/scripts/
+
 RUN set -eux; \
-    mkdir -p /opt/minfo/scripts; \
-    curl -fsSL "$SCREENSHOT_AUTO_URL" -o /opt/minfo/scripts/AutoScreenshot.sh; \
-    curl -fsSL "$SCREENSHOT_UPLOAD_URL" -o /opt/minfo/scripts/PixhostUpload.sh; \
-    curl -fsSL "$SCREENSHOT_PNG_URL" -o /opt/minfo/scripts/screenshots.sh; \
-    curl -fsSL "$SCREENSHOT_FAST_URL" -o /opt/minfo/scripts/screenshots_fast.sh; \
-    curl -fsSL "$SCREENSHOT_JPG_URL" -o /opt/minfo/scripts/screenshots_jpg.sh; \
-    sed -i 's#bash <(curl -s https://raw.githubusercontent.com/guyuanwind/Seedbox/refs/heads/main/screenshots_jpg.sh)#bash /opt/minfo/scripts/screenshots_jpg.sh#g' /opt/minfo/scripts/AutoScreenshot.sh; \
-    sed -i 's#bash <(curl -s https://raw.githubusercontent.com/guyuanwind/Seedbox/refs/heads/main/screenshots_fast.sh)#bash /opt/minfo/scripts/screenshots_fast.sh#g' /opt/minfo/scripts/AutoScreenshot.sh; \
-    sed -i 's#bash <(curl -s https://raw.githubusercontent.com/guyuanwind/Seedbox/refs/heads/main/screenshots.sh)#bash /opt/minfo/scripts/screenshots.sh#g' /opt/minfo/scripts/AutoScreenshot.sh; \
-    sed -i 's#bash <(curl -s https://raw.githubusercontent.com/guyuanwind/Seedbox/refs/heads/main/PixhostUpload.sh)#bash /opt/minfo/scripts/PixhostUpload.sh#g' /opt/minfo/scripts/AutoScreenshot.sh; \
     printf '#!/bin/sh\nexec "$@"\n' > /usr/local/bin/sudo; \
-    chmod +x /usr/local/bin/sudo /opt/minfo/scripts/*.sh
+    chmod +x /usr/local/bin/sudo /usr/local/share/minfo/scripts/*.sh
 
 COPY --from=build /out/minfo /usr/local/bin/minfo
 COPY --from=bdinfo-build /out/bdinfo/BDInfo /opt/bdinfo/BDInfo
+COPY --from=bluray-helper-build /out/bdsub /usr/local/bin/bdsub
 COPY bdinfo.sh /usr/local/bin/bdinfo
 
-RUN chmod +x /usr/local/bin/bdinfo /usr/local/bin/minfo /opt/bdinfo/BDInfo
+RUN chmod +x /usr/local/bin/bdinfo /usr/local/bin/minfo /usr/local/bin/bdsub /opt/bdinfo/BDInfo
 
 ENV BDINFO_BIN=/usr/local/bin/bdinfo
 ENV LANG=C.UTF-8
@@ -129,6 +119,8 @@ RUN apk add --no-cache \
     curl \
     ffmpeg \
     mediainfo \
+    fontconfig \
+    font-noto-cjk \
     kmod \
     libgdiplus \
     findutils \
@@ -144,12 +136,13 @@ RUN apk add --no-cache \
 
 RUN GOBIN=/usr/local/bin go install github.com/go-delve/delve/cmd/dlv@latest
 
-COPY --from=runtime /opt/minfo/scripts /opt/minfo/scripts
+COPY --from=runtime /usr/local/share/minfo/scripts /usr/local/share/minfo/scripts
 COPY --from=runtime /opt/bdinfo /opt/bdinfo
 COPY --from=runtime /usr/local/bin/bdinfo /usr/local/bin/bdinfo
+COPY --from=runtime /usr/local/bin/bdsub /usr/local/bin/bdsub
 COPY --from=runtime /usr/local/bin/sudo /usr/local/bin/sudo
 
-RUN chmod +x /usr/local/bin/dlv /usr/local/bin/bdinfo /usr/local/bin/sudo /opt/bdinfo/BDInfo /opt/minfo/scripts/*.sh
+RUN chmod +x /usr/local/bin/dlv /usr/local/bin/bdinfo /usr/local/bin/bdsub /usr/local/bin/sudo /opt/bdinfo/BDInfo /usr/local/share/minfo/scripts/*.sh
 
 ENV BDINFO_BIN=/usr/local/bin/bdinfo
 ENV LANG=C.UTF-8

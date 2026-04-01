@@ -12,8 +12,8 @@ export async function fetchDirectory(prefix = "", signal) {
     return data;
 }
 
-export async function requestInfo(path, url) {
-    const response = await postForm(url, { path });
+export async function requestInfo(path, url, fields = {}) {
+    const response = await postForm(url, { path, ...fields });
     const data = await safeReadJSON(response);
     if (!response.ok || !data.ok) {
         throw new Error(data.error || "请求失败。");
@@ -21,21 +21,32 @@ export async function requestInfo(path, url) {
     return data;
 }
 
-export async function requestScreenshotZip(path, variant) {
-    const response = await postForm("/api/screenshots", { path, mode: "zip", variant });
-    const contentType = response.headers.get("content-type") || "";
-    if (!response.ok || !contentType.includes("application/zip")) {
-        const data = await safeReadJSON(response);
-        throw new Error(data.error || "截图请求失败。");
+export async function prepareScreenshotZipDownload(path, variant, subtitleMode, count) {
+    const response = await postForm("/api/screenshots", { path, mode: "zip", variant, subtitle_mode: subtitleMode, count, prepare_download: "1" });
+    const data = await safeReadJSON(response);
+    if (!response.ok || !data.ok || typeof data.output !== "string" || data.output.trim() === "") {
+        throw buildResponseError(data.error || "截图请求失败。", data);
     }
-    return response.blob();
+    return {
+        downloadURL: new URL(data.output, window.location.origin).toString(),
+        logs: typeof data.logs === "string" ? data.logs : "",
+    };
 }
 
-export async function requestScreenshotLinks(path, variant) {
-    const response = await postForm("/api/screenshots", { path, mode: "links", variant });
+export function startPreparedDownload(url) {
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+}
+
+export async function requestScreenshotLinks(path, variant, subtitleMode, count) {
+    const response = await postForm("/api/screenshots", { path, mode: "links", variant, subtitle_mode: subtitleMode, count });
     const data = await safeReadJSON(response);
     if (!response.ok || !data.ok) {
-        throw new Error(data.error || "图床链接请求失败。");
+        throw buildResponseError(data.error || "图床链接请求失败。", data);
     }
     return data;
 }
@@ -56,4 +67,12 @@ async function safeReadJSON(response) {
     } catch {
         return {};
     }
+}
+
+function buildResponseError(message, data = {}) {
+    const error = new Error(message);
+    if (typeof data.logs === "string" && data.logs.trim() !== "") {
+        error.logs = data.logs;
+    }
+    return error;
 }
