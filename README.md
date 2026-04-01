@@ -123,6 +123,184 @@ docker compose up -d
 
 **解决**：使用最新镜像，已内置 CJK 字体
 
+## 技术实现
+
+### 媒体根目录自动检测机制
+
+#### 概述
+
+本项目实现了媒体根目录的自动检测和配置机制，主要特性包括：
+
+- **影响范围**：🟡 **中等** - 重构媒体根目录的检测和配置机制
+- **核心变更**：
+  - ✅ 新增自动挂载检测功能，动态识别容器内的媒体挂载点
+  - ✅ 将 `/media` 定义为默认媒体根目录
+  - ✅ 更新 Docker Compose 配置，使用环境变量控制挂载路径
+  - ✅ 优化路径解析逻辑，支持多根目录场景
+
+#### 架构设计
+
+```mermaid 
+graph TD 
+    subgraph "配置层 config/config.go" 
+        A["DefaultRoot = '/media'"]:::configNode 
+    end 
+    
+    subgraph "媒体路径层 media/roots.go" 
+        B["MediaRoots()"]:::funcNode 
+        C["detectMountedRoots()"]:::funcNode 
+        D["读取 /proc/self/mountinfo"]:::funcNode 
+    end 
+    
+    subgraph "API 处理层 handlers/paths.go" 
+        E["PathSuggestHandler()"]:::funcNode 
+        F["media.MediaRoots()"]:::funcNode 
+    end 
+    
+    subgraph "前端层 usePathBrowser.js" 
+        G["loadDirectory()"]:::funcNode 
+        H["fetchDirectory()"]:::funcNode 
+    end 
+    
+    A --> B 
+    B --> C 
+    C --> D 
+    E --> F 
+    F --> B 
+    G --> H 
+    H --> E 
+    
+    style A fill:#fff3e0,color:#e65100 
+    style B fill:#c8e6c9,color:#1a5e20 
+    style C fill:#c8e6c9,color:#1a5e20 
+    style D fill:#c8e6c9,color:#1a5e20 
+    style E fill:#bbdefb,color:#0d47a1 
+    style F fill:#bbdefb,color:#0d47a1 
+    style G fill:#f3e5f5,color:#7b1fa2 
+    style H fill:#f3e5f5,color:#7b1fa2 
+```
+
+**业务流程说明**：
+
+1. **配置初始化** → `DefaultRoot` 常量定义默认值为 `/media`
+2. **根目录检测** → `MediaRoots()` 调用 `detectMountedRoots()` 读取挂载信息
+3. **路径建议** → `PathSuggestHandler` 使用检测到的根目录列表
+4. **前端浏览** → `usePathBrowser` 通过 API 获取可用路径并展示
+
+#### 核心模块实现
+
+**1. 配置模块** (`internal/config/config.go`)
+
+新增 `DefaultRoot` 常量，统一管理默认媒体根目录：
+
+```go 
+const ( 
+    DefaultPort           = "28080" 
+    DefaultRoot           = "/media"  // 默认媒体根目录
+    MaxUploadBytes        = int64(8 << 30) 
+    // ... 
+) 
+```
+
+**变更影响**：
+- 为整个应用提供统一的默认媒体根目录
+- 简化配置管理，避免硬编码路径分散
+
+**2. 媒体路径模块** (`internal/media/roots.go`)
+
+完全重构媒体根目录检测逻辑，新增自动挂载检测功能：
+
+| 功能 | 之前 | 现在 | 
+|------|------|------| 
+| 根目录获取 | 硬编码或单一配置 | 动态检测挂载点 + 默认回退 | 
+| 挂载检测 | ❌ 不支持 | ✅ 读取 `/proc/self/mountinfo` | 
+| 过滤规则 | ❌ 无 | ✅ 过滤系统文件系统和系统目录 | 
+
+核心实现：
+
+```go 
+func MediaRoots() []string { 
+    if roots := detectMountedRoots(); len(roots) > 0 { 
+        return roots  // 优先使用检测到的挂载点
+    } 
+    return []string{config.DefaultRoot}  // 回退到默认 /media
+} 
+
+func detectMountedRoots() []string { 
+    // 读取 /proc/self/mountinfo
+    content, err := os.ReadFile("/proc/self/mountinfo") 
+    // 过滤系统文件系统（overlay, proc, sysfs, tmpfs 等）
+    // 过滤系统挂载点（proc, sys, dev, run, tmp 等）
+    // 只保留顶层挂载点（非嵌套路径）
+    return roots 
+} 
+```
+
+**变更影响**：
+- **自动适配**：容器启动时自动检测挂载的媒体目录，无需手动配置
+- **多路径支持**：可同时支持多个独立的媒体挂载点
+- **安全性**：过滤系统目录，防止访问敏感路径
+
+**3. 部署配置** (`docker-compose.yml`)
+
+使用环境变量控制媒体路径挂载，提供更灵活的配置方式：
+
+| 配置项 | 旧值 | 新值 | 说明 | 
+|--------|------|------|------| 
+| 挂载路径 | `/your/media/path1:/media_path1:ro` | `${MEDIA_PATH_1:-./test-media}:/media_path1:ro` | ✨ 支持环境变量 + 默认值 | 
+| 注释 | 无 | `# 程序会自动尝试加载 udf 内核模块用于挂载ISO` | ✨ 新增说明 | 
+
+配置示例：
+
+```yaml 
+volumes: 
+  - /lib/modules:/lib/modules:ro  # 用于自动加载 UDF 模块
+  - ${MEDIA_PATH_1:-./test-media}:/media_path1:ro  # 使用环境变量
+  # - ${MEDIA_PATH_2:-./test-media2}:/media_path2:ro  # 支持多路径
+```
+
+**变更影响**：
+- **灵活性提升**：可通过环境变量 `MEDIA_PATH_1`、`MEDIA_PATH_2` 等自定义挂载路径
+- **开发友好**：默认使用 `./test-media` 作为测试目录
+- **ISO 挂载**：新增 `/lib/modules` 挂载，支持自动加载 UDF 内核模块
+
+#### 改进与风险
+
+**改进点**：
+
+1. **自动化程度提升**：无需手动配置媒体路径，自动检测挂载点
+2. **部署灵活性**：支持通过环境变量自定义多个媒体路径
+3. **安全性增强**：过滤系统目录，防止误访问敏感路径
+4. **ISO 挂载支持**：自动加载 UDF 内核模块，支持蓝光原盘 ISO
+
+**潜在风险与缓解**：
+
+| 风险项 | 影响 | 缓解措施 | 
+|--------|------|----------| 
+| **挂载检测失败** | 如果 `/proc/self/mountinfo` 读取失败，回退到 `/media` | ✅ 已有默认回退机制 | 
+| **环境变量配置** | 需要用户正确设置 `MEDIA_PATH_*` 环境变量 | ✅ 提供默认值 `./test-media` | 
+
+#### 测试验证
+
+**基础功能测试**：
+- ✅ 验证容器启动后能自动检测到挂载的媒体目录
+- ✅ 验证未挂载时回退到 `/media` 默认路径
+- ✅ 验证路径浏览功能正常工作
+
+**多路径测试**：
+- ✅ 同时挂载 `MEDIA_PATH_1` 和 `MEDIA_PATH_2`
+- ✅ 验证两个路径都能在浏览器中正常访问
+- ✅ 验证路径切换功能
+
+**边界情况测试**：
+- ✅ 测试未设置环境变量时使用默认值 `./test-media`
+- ✅ 测试挂载点为系统目录时是否被正确过滤
+- ✅ 测试嵌套挂载点是否只保留顶层路径
+
+**ISO 挂载测试**：
+- ✅ 验证 UDF 内核模块自动加载功能
+- ✅ 测试蓝光原盘 ISO 文件的挂载和读取
+
 ## 更新日志
 
 ### [Unreleased]
