@@ -59,6 +59,19 @@
                     @output-links="outputShotLinks"
                 />
             </div>
+
+            <div class="panel-section">
+                <div class="panel-section-header">
+                    <label>BDInfo 高级</label>
+                </div>
+                <BDInfoPanel
+                    :path="path"
+                    :has-input="hasInput"
+                    :busy="busy"
+                    @notice="showNotice"
+                    @busy-change="handleBDInfoBusyChange"
+                />
+            </div>
         </section>
 
         <OutputPanel
@@ -92,6 +105,7 @@ import { ref, watch } from "vue";
 import ActionButtons from "./components/ActionButtons.vue";
 import AppHeader from "./components/AppHeader.vue";
 import BDInfoOutputPicker from "./components/BDInfoOutputPicker.vue";
+import BDInfoPanel from "./components/BDInfoPanel.vue";
 import ImageLinksPanel from "./components/ImageLinksPanel.vue";
 import NoticeToast from "./components/NoticeToast.vue";
 import OutputPanel from "./components/OutputPanel.vue";
@@ -152,6 +166,19 @@ const {
     copyBBCode,
     removeLink,
 } = mediaActions;
+
+const bdinfoBusy = ref(false);
+
+const showNotice = (message) => {
+    noticeText.value = message;
+    setTimeout(() => {
+        noticeText.value = "";
+    }, 2400);
+};
+
+const handleBDInfoBusyChange = (isBusy) => {
+    bdinfoBusy.value = isBusy;
+};
 
 watch(
     [path, browserDir, screenshotVariant, screenshotCount, screenshotSubtitleMode, bdinfoMode],

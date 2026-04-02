@@ -24,3 +24,9 @@ func WritePathJSON(w http.ResponseWriter, status int, payload PathResponse) {
 func WritePathError(w http.ResponseWriter, status int, msg string) {
 	WritePathJSON(w, status, PathResponse{OK: false, Error: msg})
 }
+
+func WriteAnyJSON(w http.ResponseWriter, status int, payload interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
+}

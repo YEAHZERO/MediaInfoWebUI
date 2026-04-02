@@ -15,5 +15,13 @@ func NewHandler(assets fs.FS) http.Handler {
 	mux.HandleFunc("/api/bdinfo", handlers.BDInfoHandler("BDINFO_BIN", "bdinfo"))
 	mux.HandleFunc("/api/screenshots", handlers.ScreenshotsHandler)
 	mux.HandleFunc("/api/path", handlers.PathSuggestHandler)
+
+	mux.HandleFunc("/api/bdinfo/playlists", handlers.BDInfoListPlaylistsHandler)
+	mux.HandleFunc("/api/bdinfo/jobs", handlers.BDInfoListJobsHandler)
+	mux.HandleFunc("/api/bdinfo/job/create", handlers.BDInfoCreateJobHandler)
+	mux.HandleFunc("/api/bdinfo/job", handlers.BDInfoGetJobHandler)
+	mux.HandleFunc("/api/bdinfo/report", handlers.BDInfoGetReportHandler)
+	mux.HandleFunc("/api/bdinfo/ws", handlers.BDInfoWebSocketHandler)
+
 	return middleware.Logging(middleware.Authenticate(mux))
 }

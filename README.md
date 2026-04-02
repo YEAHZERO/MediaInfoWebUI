@@ -1,6 +1,7 @@
 ## 项目介绍
 
 `minfo` 是一个本地媒体信息检测 Web 工具，主要功能：
+
 - 输出 MediaInfo 信息
 - 输出 BDInfo 信息
 - 使用 guyuan 截图脚本
@@ -8,60 +9,87 @@
 
 ![minfo 截图](docs/images/screenshot.png)
 
-## 与原版 minfo 的差异
-
-本项目基于 [minfo](https://github.com/mirrorb/minfo) 进行了多项改进和优化：
+## 本项目基于 [minfo](https://github.com/mirrorb/minfo) 进行了多项改进和优化：
 
 ### 功能增强
 
 #### 1. 截图功能
+
 - **字幕模式控制**：支持"挂载字幕"和"纯净截图"两种模式
 - **预生成下载**：截图 ZIP 先生成并返回下载链接，支持浏览器原生下载
 - **结构化日志**：返回脚本执行的详细日志，方便排查问题
 - **移除 fast 变体**：简化为 PNG 和 JPG 两种模式
 
 #### 2. BDInfo 优化
+
 - **输出精简**：支持"精简报告"（提取 [code] 块）和"完整报告"两种模式
 - **工作目录修复**：在源文件所在目录执行 BDInfo，解决相对路径问题
 
+#### 3. BDInfo 高级功能 ✨ 新增
+
+- **智能 Playlist 选择**：自动推荐时长 > 10 分钟的主片 Playlist
+- **多种扫描模式**：支持自动选择、手动选择、整盘扫描三种模式
+- **历史任务管理**：任务列表可重新查看，支持查看历史报告
+- **实时进度推送**：通过 WebSocket 实时显示扫描进度和 ETA
+
 ### 前端体验改进
+
 - **输出面板分离**：MediaInfo/BDInfo 文本输出和图床链接分别显示
 - **图床链接管理**：支持链接预览、去重、删除、复制 BBCode
 - **状态持久化**：使用 localStorage 保存用户配置，刷新页面不丢失
 - **通知提示**：操作结果和错误通过右上角 toast 提示
 - **响应式设计**：适配不同屏幕尺寸
+- **BDInfo 面板** ✨ 新增：集成 Playlist 选择、任务进度、历史记录的统一面板
 
 ### 后端稳定性
+
 - **ffprobe 增强**：双重 fallback（format → stream）和多行解析，支持更多格式
 - **文件上传安全**：文件名清理和临时目录隔离，防止路径遍历攻击
 - **脚本本地化**：截图脚本纳入版本控制，构建不再依赖外部网络
 - **CJK 字体支持**：内置中文字体，确保字幕正确渲染
+- **WebSocket 支持** ✨ 新增：实时推送任务状态和进度
 
 ### 部署与配置
+
 - **多路径挂载**：支持挂载多个独立的媒体目录（/media_path1, /media_path2 等）
 - **远程部署**：新增 run-remote-release.sh 脚本，一键部署到远程服务器
 - **端口调整**：默认端口从 28080 改为 38080，避免冲突
 - **构建代理**：支持配置 HTTP/HTTPS 代理用于 Docker 构建
-
-### 最新合并功能（2024-04-01）
-
-以下功能已从原版最新代码合并：
-
-1. **截图数量自定义**：支持 1-10 张截图数量自定义（新增前端选择器）
-2. **BDMV 字幕探测**：新增 bdsub 工具用于蓝光原盘字幕信息探测
-3. **FAST 变体移除**：简化截图模式为 PNG 和 JPG 两种
-4. **构建代理支持**：支持配置 HTTP/HTTPS 代理用于 Docker 构建
+- **网络优化** ✨ 新增：Docker 构建使用 `--network=host` 解决网络问题
 
 ## 部署方式
 
-直接使用已发布镜像 `ghcr.io/mirrorb/minfo:latest`。
+### 使用已发布镜像
 
-示例 `docker-compose.yml`：
+🎉 **镜像已推送到 GitHub Container Registry！**
+
+| 镜像 | 地址 | 大小 |
+|------|------|------|
+| v1.0.0 | `ghcr.io/yeahzero/mediainfowebui:v1.0.0` | 321MB (压缩后 98MB) |
+| latest | `ghcr.io/yeahzero/mediainfowebui:latest` | 321MB (压缩后 98MB) |
+
+### 快速部署
+
+```bash
+docker pull ghcr.io/yeahzero/mediainfowebui:latest
+
+docker run -d \
+  --name minfo \
+  --privileged \
+  -p 28080:28080 \
+  -e WEB_USERNAME=admin \
+  -e WEB_PASSWORD=your_password \
+  -v /lib/modules:/lib/modules:ro \
+  -v /your/media/path:/media_path1:ro \
+  ghcr.io/yeahzero/mediainfowebui:latest
+```
+
+### 使用 docker-compose（推荐）
 
 ```yaml
 services:
   minfo:
-    image: ghcr.io/mirrorb/minfo:latest
+    image: ghcr.io/yeahzero/mediainfowebui:latest
     container_name: minfo
     privileged: true
     ports:
@@ -69,48 +97,284 @@ services:
     environment:
       PORT: "28080"
       WEB_USERNAME: "admin"
-      WEB_PASSWORD: "passpass" # 请修改默认用户名密码
+      WEB_PASSWORD: "your_password"
       REQUEST_TIMEOUT: "20m"
     volumes:
-      - /lib/modules:/lib/modules:ro # 用于挂载ISO
-      - /your/media/path1:/media_path1:ro
-      - /your/media/path2:/media_path2:ro
-      # 可以添加更多挂载路径
+      - /lib/modules:/lib/modules:ro
+      - /path/to/your/media1:/media_path1:ro
+      - /path/to/your/media2:/media_path2:ro
     restart: unless-stopped
 ```
 
-**多路径挂载说明**：
-- 支持挂载多个独立的媒体目录
-- 容器内路径格式为 `/media_path1`、`/media_path2` 等
-- 每个路径都可以独立访问和浏览
-
 启动：
-
 ```bash
 docker compose up -d
 ```
 
-## 远程部署
+## 本地构建
 
-支持通过 SSH 一键部署到远程服务器：
+```bash
+# 快速构建（使用 host 网络）
+make docker-build
 
-1. 在 `.env` 文件中配置远程服务器信息：
-   ```
-   REMOTE_SSH_HOST=your-server-ip
-   REMOTE_SSH_USER=root
-   REMOTE_DEPLOY_DIR=/opt/minfo
-   ```
+# 运行
+make docker-run
 
-2. 执行部署脚本：
-   ```bash
-   ./scripts/run-remote-release.sh
-   ```
+# 推送
+make docker-push
+
+# 清理旧镜像
+make docker-clean
+```
+
+## API 端点
+
+### 基础 API
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/mediainfo` | POST | MediaInfo 信息 |
+| `/api/bdinfo` | POST | BDInfo 信息 |
+| `/api/screenshots` | POST | 截图生成 |
+| `/api/path` | GET | 路径浏览 |
+
+### BDInfo 任务 API ✨ 新增
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/bdinfo/playlists` | POST | 获取 Playlist 列表和推荐 |
+| `/api/bdinfo/jobs` | GET | 获取历史任务列表 |
+| `/api/bdinfo/job/create` | POST | 创建扫描任务 |
+| `/api/bdinfo/job` | GET | 获取任务详情 |
+| `/api/bdinfo/report` | GET | 获取扫描报告 |
+| `/api/bdinfo/ws` | GET | WebSocket 实时进度 |
+
+## 技术架构
+
+### 整体系统架构
+
+```mermaid
+graph TB
+    subgraph "前端 Vue 3"
+        UI[Web UI]
+        PB[PathBrowser]
+        AB[ActionButtons]
+        BP[BDInfoPanel]
+        OP[OutputPanel]
+        IL[ImageLinksPanel]
+    end
+    
+    subgraph "API 层"
+        API[HTTP API]
+        WS[WebSocket]
+    end
+    
+    subgraph "后端 Go"
+        MI[MediaInfo]
+        BI[BDInfo]
+        SS[ScreenshotService]
+        JM[JobManager]
+        WH[WebSocketHub]
+    end
+    
+    subgraph "外部工具"
+        MED[mediainfo CLI]
+        BDI[bdinfo CLI]
+        FFM[ffmpeg]
+        SCP[截图脚本]
+    end
+    
+    subgraph "存储"
+        TMP[临时目录]
+        REP[报告文件]
+    end
+    
+    UI --> PB
+    UI --> AB
+    UI --> BP
+    UI --> OP
+    UI --> IL
+    
+    PB --> API
+    AB --> API
+    BP --> API
+    BP --> WS
+    OP --> API
+    IL --> API
+    
+    API --> MI
+    API --> BI
+    API --> SS
+    API --> JM
+    WS --> WH
+    
+    MI --> MED
+    BI --> BDI
+    SS --> FFM
+    SS --> SCP
+    JM --> BDI
+    
+    WH --> BP
+    JM --> WH
+    JM --> REP
+    SS --> TMP
+```
+
+### 核心模块架构
+
+```mermaid
+graph TD
+    subgraph "前端层 Vue 3"
+        subgraph "路径浏览模块"
+            PB[PathBrowser.vue]
+            UB[usePathBrowser.js]
+        end
+        subgraph "BDInfo 任务模块"
+            BP[BDInfoPanel.vue]
+            BJ[useBDInfoJobs.js]
+        end
+        subgraph "输出模块"
+            OP[OutputPanel.vue]
+            IL[ImageLinksPanel.vue]
+        end
+    end
+    
+    subgraph "API 层"
+        subgraph "路径 API"
+            PSH[PathSuggestHandler]
+        end
+        subgraph "BDInfo 任务 API"
+            BJH[BDInfoCreateJobHandler]
+            BJL[BDInfoListJobsHandler]
+            WSH[BDInfoWebSocketHandler]
+        end
+    end
+    
+    subgraph "后端服务层"
+        subgraph "媒体路径检测"
+            MR[MediaRoots]
+            DMR[detectMountedRoots]
+            CFG["config.DefaultRoot=/media"]
+        end
+        subgraph "BDInfo 任务队列"
+            JM[JobManager]
+            SC[Scanner]
+            WH[WebSocketHub]
+        end
+    end
+    
+    subgraph "外部工具"
+        BDI[bdinfo CLI]
+        PROC[/proc/self/mountinfo]
+    end
+    
+    subgraph "存储"
+        REP[报告文件]
+        MEM[内存任务列表]
+    end
+    
+    PB --> UB
+    UB --> PSH
+    PSH --> MR
+    MR --> DMR
+    DMR --> PROC
+    CFG --> MR
+    
+    BP --> BJ
+    BJ --> BJH
+    BJ --> WSH
+    BJH --> JM
+    WSH --> WH
+    JM --> SC
+    SC --> BDI
+    SC --> WH
+    WH --> BJ
+    JM --> MEM
+    SC --> REP
+    
+    style PB fill:#f3e5f5,color:#7b1fa2
+    style BP fill:#f3e5f5,color:#7b1fa2
+    style PSH fill:#bbdefb,color:#0d47a1
+    style BJH fill:#bbdefb,color:#0d47a1
+    style WSH fill:#bbdefb,color:#0d47a1
+    style MR fill:#c8e6c9,color:#1a5e20
+    style JM fill:#c8e6c9,color:#1a5e20
+    style SC fill:#c8e6c9,color:#1a5e20
+    style WH fill:#c8e6c9,color:#1a5e20
+    style CFG fill:#fff3e0,color:#e65100
+```
+
+**业务流程**：
+
+| 模块 | 流程 |
+|------|------|
+| **路径检测** | `DefaultRoot=/media` → `MediaRoots()` → 读取 `/proc/self/mountinfo` → 返回可用路径 |
+| **BDInfo 任务** | 前端创建任务 → `JobManager` 入队 → `Scanner` 执行 BDInfo CLI → `WebSocketHub` 广播进度 |
+| **实时通信** | 前端连接 WebSocket → 接收任务更新/进度 → 显示实时状态 |
+
+### WebSocket 实时通信架构 ✨ 新增
+
+```mermaid
+sequenceDiagram
+    participant F as 前端
+    participant W as WebSocket Handler
+    participant H as WebSocketHub
+    participant S as Scanner
+    
+    F->>W: 连接 /api/bdinfo/ws
+    W->>H: Register(connection)
+    H->>F: 发送现有任务列表
+    
+    loop 扫描过程
+        S->>H: BroadcastJobUpdate(job)
+        H->>F: {"type":"job_update","data":{...}}
+        S->>H: BroadcastProgress(jobID, 45%, 120s)
+        H->>F: {"type":"progress","data":{...}}
+    end
+    
+    S->>H: BroadcastJobUpdate(job完成)
+    H->>F: {"type":"job_update","data":{status:"done"}}
+```
+
+**WebSocket 消息类型**：
+
+| type | 说明 | data |
+|------|------|------|
+| `job_update` | 任务状态更新 | Job 对象 |
+| `progress` | 进度更新 | `{jobId, progress, etaSec}` |
+| `ping` | 心跳检测 | 时间戳 |
+
+### 新增依赖
+
+| 包 | 版本 | 说明 |
+|---|------|------|
+| github.com/gorilla/websocket | v1.5.1 | WebSocket 支持 |
+
+### 新增文件
+
+```
+internal/bdinfo/
+├── playlist.go      # Playlist 列表和推荐算法
+├── job.go           # 任务队列管理
+├── scanner.go       # BDInfo 扫描执行器
+└── websocket.go     # WebSocket Hub
+
+internal/httpapi/handlers/
+└── bdinfo_jobs.go   # BDInfo 任务 API 处理器
+
+webui/src/
+├── api/media.js              # API 函数（含 BDInfo 任务）
+├── composables/useBDInfoJobs.js  # BDInfo 任务管理
+└── components/
+    ├── BDInfoPanel.vue       # BDInfo 统一面板
+    ├── BDInfoPlaylistPicker.vue  # Playlist 选择器
+    ├── BDInfoJobProgress.vue # 任务进度显示
+    └── BDInfoJobHistory.vue  # 历史任务列表
+```
 
 ## 常见问题
 
 **问题**：Web 界面显示"读取路径失败"
-
-**原因**：路径不存在或权限问题
 
 **解决**：
 1. 检查挂载路径是否正确
@@ -119,229 +383,39 @@ docker compose up -d
 
 **问题**：截图中字幕显示为方块
 
-**原因**：缺少中文字体
-
 **解决**：使用最新镜像，已内置 CJK 字体
 
-## 技术实现
+**问题**：Docker 构建网络超时
 
-### 媒体根目录自动检测机制
-
-#### 概述
-
-本项目实现了媒体根目录的自动检测和配置机制，主要特性包括：
-
-- **影响范围**：🟡 **中等** - 重构媒体根目录的检测和配置机制
-- **核心变更**：
-  - ✅ 新增自动挂载检测功能，动态识别容器内的媒体挂载点
-  - ✅ 将 `/media` 定义为默认媒体根目录
-  - ✅ 更新 Docker Compose 配置，使用环境变量控制挂载路径
-  - ✅ 优化路径解析逻辑，支持多根目录场景
-
-#### 架构设计
-
-```mermaid 
-graph TD 
-    subgraph "配置层 config/config.go" 
-        A["DefaultRoot = '/media'"]:::configNode 
-    end 
-    
-    subgraph "媒体路径层 media/roots.go" 
-        B["MediaRoots()"]:::funcNode 
-        C["detectMountedRoots()"]:::funcNode 
-        D["读取 /proc/self/mountinfo"]:::funcNode 
-    end 
-    
-    subgraph "API 处理层 handlers/paths.go" 
-        E["PathSuggestHandler()"]:::funcNode 
-        F["media.MediaRoots()"]:::funcNode 
-    end 
-    
-    subgraph "前端层 usePathBrowser.js" 
-        G["loadDirectory()"]:::funcNode 
-        H["fetchDirectory()"]:::funcNode 
-    end 
-    
-    A --> B 
-    B --> C 
-    C --> D 
-    E --> F 
-    F --> B 
-    G --> H 
-    H --> E 
-    
-    style A fill:#fff3e0,color:#e65100 
-    style B fill:#c8e6c9,color:#1a5e20 
-    style C fill:#c8e6c9,color:#1a5e20 
-    style D fill:#c8e6c9,color:#1a5e20 
-    style E fill:#bbdefb,color:#0d47a1 
-    style F fill:#bbdefb,color:#0d47a1 
-    style G fill:#f3e5f5,color:#7b1fa2 
-    style H fill:#f3e5f5,color:#7b1fa2 
+**解决**：使用 `--network=host` 参数
+```bash
+docker build --network=host -t minfo:local .
 ```
-
-**业务流程说明**：
-
-1. **配置初始化** → `DefaultRoot` 常量定义默认值为 `/media`
-2. **根目录检测** → `MediaRoots()` 调用 `detectMountedRoots()` 读取挂载信息
-3. **路径建议** → `PathSuggestHandler` 使用检测到的根目录列表
-4. **前端浏览** → `usePathBrowser` 通过 API 获取可用路径并展示
-
-#### 核心模块实现
-
-**1. 配置模块** (`internal/config/config.go`)
-
-新增 `DefaultRoot` 常量，统一管理默认媒体根目录：
-
-```go 
-const ( 
-    DefaultPort           = "28080" 
-    DefaultRoot           = "/media"  // 默认媒体根目录
-    MaxUploadBytes        = int64(8 << 30) 
-    // ... 
-) 
-```
-
-**变更影响**：
-- 为整个应用提供统一的默认媒体根目录
-- 简化配置管理，避免硬编码路径分散
-
-**2. 媒体路径模块** (`internal/media/roots.go`)
-
-完全重构媒体根目录检测逻辑，新增自动挂载检测功能：
-
-| 功能 | 之前 | 现在 | 
-|------|------|------| 
-| 根目录获取 | 硬编码或单一配置 | 动态检测挂载点 + 默认回退 | 
-| 挂载检测 | ❌ 不支持 | ✅ 读取 `/proc/self/mountinfo` | 
-| 过滤规则 | ❌ 无 | ✅ 过滤系统文件系统和系统目录 | 
-
-核心实现：
-
-```go 
-func MediaRoots() []string { 
-    if roots := detectMountedRoots(); len(roots) > 0 { 
-        return roots  // 优先使用检测到的挂载点
-    } 
-    return []string{config.DefaultRoot}  // 回退到默认 /media
-} 
-
-func detectMountedRoots() []string { 
-    // 读取 /proc/self/mountinfo
-    content, err := os.ReadFile("/proc/self/mountinfo") 
-    // 过滤系统文件系统（overlay, proc, sysfs, tmpfs 等）
-    // 过滤系统挂载点（proc, sys, dev, run, tmp 等）
-    // 只保留顶层挂载点（非嵌套路径）
-    return roots 
-} 
-```
-
-**变更影响**：
-- **自动适配**：容器启动时自动检测挂载的媒体目录，无需手动配置
-- **多路径支持**：可同时支持多个独立的媒体挂载点
-- **安全性**：过滤系统目录，防止访问敏感路径
-
-**3. 部署配置** (`docker-compose.yml`)
-
-使用环境变量控制媒体路径挂载，提供更灵活的配置方式：
-
-| 配置项 | 旧值 | 新值 | 说明 | 
-|--------|------|------|------| 
-| 挂载路径 | `/your/media/path1:/media_path1:ro` | `${MEDIA_PATH_1:-./test-media}:/media_path1:ro` | ✨ 支持环境变量 + 默认值 | 
-| 注释 | 无 | `# 程序会自动尝试加载 udf 内核模块用于挂载ISO` | ✨ 新增说明 | 
-
-配置示例：
-
-```yaml 
-volumes: 
-  - /lib/modules:/lib/modules:ro  # 用于自动加载 UDF 模块
-  - ${MEDIA_PATH_1:-./test-media}:/media_path1:ro  # 使用环境变量
-  # - ${MEDIA_PATH_2:-./test-media2}:/media_path2:ro  # 支持多路径
-```
-
-**变更影响**：
-- **灵活性提升**：可通过环境变量 `MEDIA_PATH_1`、`MEDIA_PATH_2` 等自定义挂载路径
-- **开发友好**：默认使用 `./test-media` 作为测试目录
-- **ISO 挂载**：新增 `/lib/modules` 挂载，支持自动加载 UDF 内核模块
-
-#### 改进与风险
-
-**改进点**：
-
-1. **自动化程度提升**：无需手动配置媒体路径，自动检测挂载点
-2. **部署灵活性**：支持通过环境变量自定义多个媒体路径
-3. **安全性增强**：过滤系统目录，防止误访问敏感路径
-4. **ISO 挂载支持**：自动加载 UDF 内核模块，支持蓝光原盘 ISO
-
-**潜在风险与缓解**：
-
-| 风险项 | 影响 | 缓解措施 | 
-|--------|------|----------| 
-| **挂载检测失败** | 如果 `/proc/self/mountinfo` 读取失败，回退到 `/media` | ✅ 已有默认回退机制 | 
-| **环境变量配置** | 需要用户正确设置 `MEDIA_PATH_*` 环境变量 | ✅ 提供默认值 `./test-media` | 
-
-#### 测试验证
-
-**基础功能测试**：
-- ✅ 验证容器启动后能自动检测到挂载的媒体目录
-- ✅ 验证未挂载时回退到 `/media` 默认路径
-- ✅ 验证路径浏览功能正常工作
-
-**多路径测试**：
-- ✅ 同时挂载 `MEDIA_PATH_1` 和 `MEDIA_PATH_2`
-- ✅ 验证两个路径都能在浏览器中正常访问
-- ✅ 验证路径切换功能
-
-**边界情况测试**：
-- ✅ 测试未设置环境变量时使用默认值 `./test-media`
-- ✅ 测试挂载点为系统目录时是否被正确过滤
-- ✅ 测试嵌套挂载点是否只保留顶层路径
-
-**ISO 挂载测试**：
-- ✅ 验证 UDF 内核模块自动加载功能
-- ✅ 测试蓝光原盘 ISO 文件的挂载和读取
 
 ## 更新日志
 
-### [Unreleased]
+### [v1.0.0] - 2024-04-02
 
 #### 新增功能
-- 截图数量自定义功能：支持 1-10 张截图数量自定义
-- BDMV 字幕探测工具：新增 bdsub 工具用于蓝光原盘字幕信息探测
-- 多路径挂载支持：支持挂载多个独立的媒体目录
-- 构建代理支持：支持配置 HTTP/HTTPS 代理用于 Docker 构建
-- 截图数量选择器组件：前端新增截图数量选择功能
+
+- **BDInfo 高级功能**
+  - 智能 Playlist 选择（自动推荐时长 > 10min）
+  - 整盘扫描支持
+  - 历史任务管理
+  - WebSocket 实时进度推送
+- **截图数量自定义**：支持 1-10 张截图数量自定义
+- **BDMV 字幕探测**：新增 bdsub 工具
+- **多路径挂载**：支持多个独立媒体目录
+- **构建代理**：支持 HTTP/HTTPS 代理
 
 #### 变更
-- 移除 FAST 截图变体选项，简化为 PNG 和 JPG 两种模式
-- 更新 README 文档，添加与原版 minfo 的差异说明
-- 优化配置文件结构，支持更灵活的部署配置
+
+- 移除 FAST 截图变体，简化为 PNG 和 JPG
+- 优化 Dockerfile，基于原版镜像只覆盖修改文件
+- Docker 构建使用 `--network=host` 解决网络问题
 
 #### 修复
-- 修复截图数量固定为 4 张的限制
-- 改进多路径挂载的文档说明
 
-### [1.0.0] - 2024-01-01
-
-#### 新增功能
-- MediaInfo 信息输出功能
-- BDInfo 信息输出功能
-- 截图生成功能（PNG/JPG）
-- 图床链接生成功能
-- 字幕模式控制（挂载字幕/纯净截图）
-- BDInfo 输出精简模式
-- 前端界面优化
-  - 输出面板分离
-  - 图床链接管理
-  - 状态持久化
-  - 通知提示
-  - 响应式设计
-- 后端稳定性改进
-  - ffprobe 增强
-  - 文件上传安全
-  - 脚本本地化
-  - CJK 字体支持
-- 远程部署功能
-
-#### 安全改进
-- 文件名清理和临时目录隔离，防止路径遍历攻击
+- 修复截图数量固定限制
+- 改进多路径挂载文档
+- WebSocket 连接稳定性优化
