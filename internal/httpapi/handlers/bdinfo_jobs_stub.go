@@ -1,17 +1,14 @@
-//go:build websocket
+//go:build !websocket
 
 package handlers
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/gorilla/websocket"
 
 	"minfo/internal/bdinfo"
 	"minfo/internal/httpapi/transport"
@@ -22,14 +19,6 @@ var (
 	jobManager     *bdinfo.JobManager
 	scanner        *bdinfo.Scanner
 )
-
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
-}
 
 func initJobManager() {
 	binPath := os.Getenv("BDINFO_BIN")
@@ -45,7 +34,6 @@ func initJobManager() {
 	var err error
 	jobManager, err = bdinfo.NewJobManager(tempDir, binPath)
 	if err != nil {
-		log.Printf("Failed to create job manager: %v", err)
 		return
 	}
 
@@ -224,47 +212,6 @@ func BDInfoGetReportHandler(w http.ResponseWriter, r *http.Request) {
 		"ok":     true,
 		"report": string(data),
 	})
-}
-
-func BDInfoWebSocketHandler(w http.ResponseWriter, r *http.Request) {
-	jm := getJobManager()
-	if jm == nil {
-		transport.WriteError(w, http.StatusInternalServerError, "job manager not initialized")
-		return
-	}
-
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Printf("WebSocket upgrade failed: %v", err)
-		return
-	}
-	defer conn.Close()
-
-	wsConn := bdinfo.NewWebSocketConnection(jm.WebSocketHub())
-	jm.WebSocketHub().Register(wsConn)
-	defer jm.WebSocketHub().Unregister(wsConn)
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		for {
-			_, _, err := conn.ReadMessage()
-			if err != nil {
-				return
-			}
-		}
-	}()
-
-	for {
-		select {
-		case <-done:
-			return
-		case msg := <-wsConn.SendChannel():
-			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-				return
-			}
-		}
-	}
 }
 
 func contextWithTimeout(r *http.Request) (context.Context, context.CancelFunc) {

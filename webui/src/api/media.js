@@ -104,6 +104,20 @@ export async function fetchBDInfoReport(jobId) {
     return data.report;
 }
 
+export async function fetchVersionInfo() {
+    try {
+        const response = await fetch("/api/version");
+        const data = await safeReadJSON(response);
+        if (!response.ok || !data.ok) {
+            throw new Error(data.error || "获取版本信息失败。");
+        }
+        return data.version;
+    } catch (e) {
+        console.warn("Failed to fetch version info:", e);
+        return null;
+    }
+}
+
 export function createBDInfoWebSocket(onMessage, onError) {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/api/bdinfo/ws`;

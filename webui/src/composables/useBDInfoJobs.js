@@ -13,6 +13,8 @@ export function useBDInfoJobs(path, hasInput) {
     const error = ref("");
     const ws = ref(null);
     const wsConnected = ref(false);
+    const pollingInterval = ref(null);
+    const pollingEnabled = ref(false);
 
     const hasActiveJob = computed(() => {
         if (!activeJob.value) return false;
@@ -29,34 +31,88 @@ export function useBDInfoJobs(path, hasInput) {
         });
     });
 
-    const connectWebSocket = () => {
-        if (ws.value) {
-            ws.value.close();
+    const startPolling = () => {
+        if (pollingInterval.value) {
+            clearInterval(pollingInterval.value);
         }
-
-        ws.value = createBDInfoWebSocket(
-            (msg) => {
-                if (msg.type === "job_update" && msg.data) {
-                    updateJobFromWS(msg.data);
-                } else if (msg.type === "progress" && msg.data) {
-                    updateJobProgress(msg.data);
+        
+        pollingEnabled.value = true;
+        pollingInterval.value = setInterval(async () => {
+            if (!wsConnected.value) {
+                await loadJobs();
+                if (activeJob.value) {
+                    try {
+                        const updatedJob = await fetchBDInfoJob(activeJob.value.id);
+                        activeJob.value = updatedJob;
+                        
+                        const jobIndex = jobs.value.findIndex(j => j.id === updatedJob.id);
+                        if (jobIndex >= 0) {
+                            jobs.value[jobIndex] = updatedJob;
+                        }
+                    } catch (e) {
+                        console.warn("Failed to poll job status:", e);
+                    }
                 }
-                wsConnected.value = true;
-            },
-            () => {
-                wsConnected.value = false;
-                setTimeout(connectWebSocket, 3000);
             }
-        );
+        }, 3000);
+    };
 
-        ws.value.onopen = () => {
-            wsConnected.value = true;
-        };
+    const stopPolling = () => {
+        if (pollingInterval.value) {
+            clearInterval(pollingInterval.value);
+            pollingInterval.value = null;
+        }
+        pollingEnabled.value = false;
+    };
 
-        ws.value.onclose = () => {
+    const connectWebSocket = () => {
+        try {
+            if (ws.value) {
+                ws.value.close();
+            }
+
+            ws.value = createBDInfoWebSocket(
+                (msg) => {
+                    if (msg.type === "job_update" && msg.data) {
+                        updateJobFromWS(msg.data);
+                    } else if (msg.type === "progress" && msg.data) {
+                        updateJobProgress(msg.data);
+                    }
+                    wsConnected.value = true;
+                    if (pollingEnabled.value) {
+                        stopPolling();
+                    }
+                },
+                () => {
+                    wsConnected.value = false;
+                    if (!pollingEnabled.value) {
+                        startPolling();
+                    }
+                    setTimeout(connectWebSocket, 5000);
+                }
+            );
+
+            ws.value.onopen = () => {
+                wsConnected.value = true;
+                if (pollingEnabled.value) {
+                    stopPolling();
+                }
+            };
+
+            ws.value.onclose = () => {
+                wsConnected.value = false;
+                if (!pollingEnabled.value) {
+                    startPolling();
+                }
+                setTimeout(connectWebSocket, 5000);
+            };
+        } catch (e) {
+            console.error("WebSocket connection failed:", e);
             wsConnected.value = false;
-            setTimeout(connectWebSocket, 3000);
-        };
+            if (!pollingEnabled.value) {
+                startPolling();
+            }
+        }
     };
 
     const updateJobFromWS = (jobData) => {
@@ -201,12 +257,14 @@ export function useBDInfoJobs(path, hasInput) {
     onMounted(() => {
         loadJobs();
         connectWebSocket();
+        startPolling();
     });
 
     onUnmounted(() => {
         if (ws.value) {
             ws.value.close();
         }
+        stopPolling();
     });
 
     return {
@@ -221,6 +279,7 @@ export function useBDInfoJobs(path, hasInput) {
         loadingPlaylists,
         error,
         wsConnected,
+        pollingEnabled,
         hasActiveJob,
         loadJobs,
         loadPlaylists,

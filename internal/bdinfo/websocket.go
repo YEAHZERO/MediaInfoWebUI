@@ -1,3 +1,5 @@
+//go:build websocket
+
 package bdinfo
 
 import (

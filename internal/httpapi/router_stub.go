@@ -1,4 +1,4 @@
-//go:build websocket
+//go:build !websocket
 
 package httpapi
 
@@ -24,7 +24,6 @@ func NewHandler(assets fs.FS) http.Handler {
 	mux.HandleFunc("/api/bdinfo/job/create", handlers.BDInfoCreateJobHandler)
 	mux.HandleFunc("/api/bdinfo/job", handlers.BDInfoGetJobHandler)
 	mux.HandleFunc("/api/bdinfo/report", handlers.BDInfoGetReportHandler)
-	mux.HandleFunc("/api/bdinfo/ws", handlers.BDInfoWebSocketHandler)
 
 	return middleware.Logging(middleware.Authenticate(mux))
 }

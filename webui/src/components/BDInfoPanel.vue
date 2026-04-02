@@ -1,28 +1,27 @@
 <template>
     <div class="bdinfo-panel">
-        <div class="bdinfo-tabs">
-            <button
-                type="button"
-                class="ghost tab-btn"
-                :class="{ active: activeTab === 'scan' }"
-                :disabled="busy"
-                @click="activeTab = 'scan'"
-            >
-                扫描
-            </button>
-            <button
-                type="button"
-                class="ghost tab-btn"
-                :class="{ active: activeTab === 'history' }"
-                :disabled="busy"
-                @click="activeTab = 'history'"
-            >
-                历史
-            </button>
-        </div>
-
-        <div v-if="activeTab === 'scan'" class="bdinfo-scan">
-            <div class="scan-mode">
+        <div class="bdinfo-header-row">
+            <div class="bdinfo-tabs">
+                <button
+                    type="button"
+                    class="ghost tab-btn"
+                    :class="{ active: activeTab === 'scan' }"
+                    :disabled="busy"
+                    @click="activeTab = 'scan'"
+                >
+                    扫描
+                </button>
+                <button
+                    type="button"
+                    class="ghost tab-btn"
+                    :class="{ active: activeTab === 'history' }"
+                    :disabled="busy"
+                    @click="activeTab = 'history'"
+                >
+                    历史
+                </button>
+            </div>
+            <div v-if="activeTab === 'scan'" class="scan-mode">
                 <label class="field-label-muted">扫描模式</label>
                 <div class="variant-picker">
                     <button
@@ -54,7 +53,9 @@
                     </button>
                 </div>
             </div>
+        </div>
 
+        <div v-if="activeTab === 'scan'" class="bdinfo-scan">
             <div v-if="scanMode === 'playlists'" class="playlist-section">
                 <div class="section-header">
                     <span>选择 Playlists</span>
