@@ -2,8 +2,8 @@
 
 > 基于 [minfo](https://github.com/mirrorb/minfo) 改进的本地媒体信息检测 Web 工具
 
-[!\[Docker Pulls\](https://img.shields.io/badge/docker-ghcr.io-blue null)](https://github.com/YEAHZERO/MediaInfoWebUI/pkgs/container/mediainfowebui)
-[!\[Version\](https://img.shields.io/badge/version-1.0.0-green null)]()
+[!\[Docker Pulls\](https://img.shields.io/badge/docker-ghcr.io-blue)](https://github.com/YEAHZERO/MediaInfoWebUI/pkgs/container/mediainfowebui)
+[!\[Version\](https://img.shields.io/badge/version-1.0.0-green)]()
 
 ## 目录
 
