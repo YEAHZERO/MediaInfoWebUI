@@ -30,7 +30,7 @@
 - 📸 灵活的截图生成（支持自定义数量、字幕模式）
 - 🔗 图床链接生成与管理
 
-!\[minfo 截图]\(docs/images/screenshot.png null)
+!\[minfo 截图]\(docs/images/screenshot.png)
 
 ***
 
