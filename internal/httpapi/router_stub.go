@@ -15,6 +15,7 @@ func NewHandler(assets fs.FS) http.Handler {
 	mux.Handle("/", http.FileServer(http.FS(assets)))
 	mux.HandleFunc("/api/mediainfo", handlers.MediaInfoHandler("MEDIAINFO_BIN", "mediainfo"))
 	mux.HandleFunc("/api/bdinfo", handlers.BDInfoHandler("BDINFO_BIN", "bdinfo"))
+	mux.HandleFunc("/api/mkvmerge/tracks", handlers.MkvMergeTrackInfoHandler())
 	mux.HandleFunc("/api/screenshots", handlers.ScreenshotsHandler)
 	mux.HandleFunc("/api/path", handlers.PathSuggestHandler)
 	mux.HandleFunc("/api/version", handlers.VersionHandler)
@@ -24,6 +25,7 @@ func NewHandler(assets fs.FS) http.Handler {
 	mux.HandleFunc("/api/bdinfo/job/create", handlers.BDInfoCreateJobHandler)
 	mux.HandleFunc("/api/bdinfo/job", handlers.BDInfoGetJobHandler)
 	mux.HandleFunc("/api/bdinfo/report", handlers.BDInfoGetReportHandler)
+	mux.HandleFunc("/api/bdinfo/ws", handlers.BDInfoWebSocketStubHandler)
 
 	return middleware.Logging(middleware.Authenticate(mux))
 }

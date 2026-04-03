@@ -8,6 +8,10 @@
             <span v-if="activeAction === 'bdinfo'" class="action-btn-spinner"></span>
             <span>{{ activeAction === "bdinfo" ? "生成中..." : "生成 BDInfo" }}</span>
         </button>
+        <button class="action-btn" :class="{ loading: activeAction === 'mkvmerge-tracks' }" :disabled="busy || !hasInput" @click="$emit('mkvmerge-tracks')">
+            <span v-if="activeAction === 'mkvmerge-tracks'" class="action-btn-spinner"></span>
+            <span>{{ activeAction === "mkvmerge-tracks" ? "生成中..." : "生成 mkvmerge 轨道信息" }}</span>
+        </button>
         <button class="action-btn" :class="{ loading: activeAction === 'download-shots' }" :disabled="busy || !hasInput" @click="$emit('download-shots')">
             <span v-if="activeAction === 'download-shots'" class="action-btn-spinner"></span>
             <span>{{ activeAction === "download-shots" ? "下载中..." : "下载 4 张截图" }}</span>
@@ -26,5 +30,5 @@ defineProps({
     hasInput: { type: Boolean, required: true },
 });
 
-defineEmits(["mediainfo", "bdinfo", "download-shots", "output-links"]);
+defineEmits(["mediainfo", "bdinfo", "mkvmerge-tracks", "download-shots", "output-links"]);
 </script>

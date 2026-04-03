@@ -217,3 +217,7 @@ func BDInfoGetReportHandler(w http.ResponseWriter, r *http.Request) {
 func contextWithTimeout(r *http.Request) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(r.Context(), 5*time.Minute)
 }
+
+func BDInfoWebSocketStubHandler(w http.ResponseWriter, r *http.Request) {
+	transport.WriteError(w, http.StatusServiceUnavailable, "WebSocket not supported in this build")
+}

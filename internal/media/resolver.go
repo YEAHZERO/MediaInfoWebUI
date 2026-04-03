@@ -99,6 +99,20 @@ func ResolveBDInfoSource(ctx context.Context, input string) (string, func(), err
 		return "", func() {}, err
 	}
 
+	// 新增：递归查找子目录中的 BDMV
+	bdmvPath := findBDMVInSubdirs(input)
+	if bdmvPath != "" {
+		if bdRoot, ok := resolveBDInfoRoot(bdmvPath); ok {
+			return bdRoot, func() {}, nil
+		}
+	}
+
+	// 新增：递归查找子目录中的 ISO
+	isoPath = findISOInSubdirs(input)
+	if isoPath != "" {
+		return resolveBDInfoFromMountedISO(ctx, isoPath)
+	}
+
 	return "", func() {}, errors.New("path does not contain BDMV or BDISO content")
 }
 
@@ -328,4 +342,42 @@ func findLargestVideoFile(root string) (string, error) {
 		return "", fmt.Errorf("%w under directory: %s", errNoVideo, root)
 	}
 	return largestPath, nil
+}
+
+// findBDMVInSubdirs 在子目录中递归查找 BDMV 目录
+func findBDMVInSubdirs(root string) string {
+	var bdmvPath string
+	filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !d.IsDir() {
+			return nil
+		}
+		if strings.EqualFold(d.Name(), "BDMV") {
+			bdmvPath = path
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return bdmvPath
+}
+
+// findISOInSubdirs 在子目录中递归查找 ISO 文件
+func findISOInSubdirs(root string) string {
+	var isoPath string
+	filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if isISOFile(path) {
+			isoPath = path
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return isoPath
 }

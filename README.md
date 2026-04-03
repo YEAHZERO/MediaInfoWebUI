@@ -27,6 +27,7 @@
 
 - 📊 输出 MediaInfo 详细信息
 - 🎬 输出 BDInfo 蓝光原盘信息
+- 🎞️ 输出 mkvmerge 轨道信息
 - 📸 灵活的截图生成（支持自定义数量、字幕模式）
 - 🔗 图床链接生成与管理
 
@@ -230,13 +231,14 @@ make docker-run
 
 ### 基础 API
 
-| 端点                 | 方法   | 说明              |
-| ------------------ | ---- | --------------- |
-| `/api/mediainfo`   | POST | 获取 MediaInfo 信息 |
-| `/api/bdinfo`      | POST | 获取 BDInfo 信息    |
-| `/api/screenshots` | POST | 生成截图            |
-| `/api/path`        | GET  | 路径浏览            |
-| `/api/version`     | GET  | 获取版本信息          |
+| 端点                       | 方法   | 说明                  |
+| ------------------------ | ---- | ------------------- |
+| `/api/mediainfo`         | POST | 获取 MediaInfo 信息     |
+| `/api/bdinfo`            | POST | 获取 BDInfo 信息        |
+| `/api/mkvmerge/tracks`   | POST | 获取 mkvmerge 轨道信息   |
+| `/api/screenshots`       | POST | 生成截图                |
+| `/api/path`              | GET  | 路径浏览                |
+| `/api/version`           | GET  | 获取版本信息              |
 
 ### BDInfo 任务 API ✨
 
@@ -276,6 +278,7 @@ graph TB
     subgraph "后端 Go"
         MI[MediaInfo]
         BI[BDInfo]
+        MK[MkvMerge]
         SS[ScreenshotService]
         JM[JobManager]
         WH[WebSocketHub]
@@ -284,6 +287,7 @@ graph TB
     subgraph "外部工具"
         MED[mediainfo CLI]
         BDI[bdinfo CLI]
+        MKV[mkvmerge CLI]
         FFM[ffmpeg]
         SCP[截图脚本]
     end
@@ -308,12 +312,14 @@ graph TB
     
     API --> MI
     API --> BI
+    API --> MK
     API --> SS
     API --> JM
     WS --> WH
     
     MI --> MED
     BI --> BDI
+    MK --> MKV
     SS --> FFM
     SS --> SCP
     JM --> BDI
@@ -436,6 +442,7 @@ docker compose up -d
 
 - BDInfo 高级功能：智能 Playlist 选择、整盘扫描、历史任务管理
 - WebSocket 实时进度推送
+- mkvmerge 轨道信息查询功能
 - 截图数量自定义（1-10 张）
 - BDMV 字幕探测工具 (bdsub)
 - 多路径挂载支持

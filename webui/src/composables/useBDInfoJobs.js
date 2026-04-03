@@ -39,7 +39,7 @@ export function useBDInfoJobs(path, hasInput) {
         pollingEnabled.value = true;
         pollingInterval.value = setInterval(async () => {
             if (!wsConnected.value) {
-                await loadJobs();
+                await loadJobs(false);  // 轮询时不显示 loading 状态
                 if (activeJob.value) {
                     try {
                         const updatedJob = await fetchBDInfoJob(activeJob.value.id);
@@ -88,7 +88,8 @@ export function useBDInfoJobs(path, hasInput) {
                     if (!pollingEnabled.value) {
                         startPolling();
                     }
-                    setTimeout(connectWebSocket, 5000);
+                    // 不再自动重连，避免无限重试
+                    // setTimeout(connectWebSocket, 5000);
                 }
             );
 
@@ -104,7 +105,8 @@ export function useBDInfoJobs(path, hasInput) {
                 if (!pollingEnabled.value) {
                     startPolling();
                 }
-                setTimeout(connectWebSocket, 5000);
+                // 不再自动重连，避免无限重试
+                // setTimeout(connectWebSocket, 5000);
             };
         } catch (e) {
             console.error("WebSocket connection failed:", e);
@@ -144,14 +146,18 @@ export function useBDInfoJobs(path, hasInput) {
         }
     };
 
-    const loadJobs = async () => {
+    const loadJobs = async (showLoading = true) => {
         try {
-            loading.value = true;
+            if (showLoading) {
+                loading.value = true;
+            }
             jobs.value = await fetchBDInfoJobs();
         } catch (e) {
             error.value = e.message;
         } finally {
-            loading.value = false;
+            if (showLoading) {
+                loading.value = false;
+            }
         }
     };
 

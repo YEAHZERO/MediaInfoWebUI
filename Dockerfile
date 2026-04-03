@@ -27,12 +27,20 @@ ENV GOPROXY=https://goproxy.cn,direct
 ARG BUILD_TIME
 ARG BUILD_VERSION
 ARG BUILD_COMMIT
-RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -buildvcs=false -ldflags="-s -w -X minfo/internal/httpapi/handlers.BuildTime=${BUILD_TIME:-unknown} -X minfo/internal/httpapi/handlers.BuildVersion=${BUILD_VERSION:-dev} -X minfo/internal/httpapi/handlers.BuildCommit=${BUILD_COMMIT:-unknown}" -o /out/minfo ./cmd/minfo
+
+# 获取版本信息并构建
+RUN BUILD_TIME=${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)} && \
+    BUILD_VERSION=${BUILD_VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo "dev")} && \
+    BUILD_COMMIT=${BUILD_COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")} && \
+    GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -buildvcs=false -ldflags="-s -w -X minfo/internal/httpapi/handlers.BuildTime=${BUILD_TIME} -X minfo/internal/httpapi/handlers.BuildVersion=${BUILD_VERSION} -X minfo/internal/httpapi/handlers.BuildCommit=${BUILD_COMMIT}" -o /out/minfo ./cmd/minfo
 
 # ============================================
 # Stage: 最终镜像 - 直接使用原版镜像
 # ============================================
 FROM ghcr.io/mirrorb/minfo:latest AS runtime
+
+# 安装 mkvmerge (mkvtoolnix)
+RUN apk add --no-cache mkvtoolnix
 
 # 复制截图脚本
 COPY scripts/seedbox/ /usr/local/share/minfo/scripts/

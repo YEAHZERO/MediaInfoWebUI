@@ -79,6 +79,7 @@
                     :has-input="hasInput"
                     @mediainfo="runInfo('/api/mediainfo', 'MediaInfo', {}, 'mediainfo')"
                     @bdinfo="runInfo('/api/bdinfo', 'BDInfo', { bdinfo_mode: bdinfoMode }, 'bdinfo')"
+                    @mkvmerge-tracks="runInfo('/api/mkvmerge/tracks', 'MKVMerge 轨道信息', {}, 'mkvmerge-tracks')"
                     @download-shots="downloadShots"
                     @output-links="outputShotLinks"
                 />
