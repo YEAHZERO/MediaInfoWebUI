@@ -3,7 +3,7 @@
 > 基于 [minfo](https://github.com/mirrorb/minfo) 改进的本地媒体信息检测 Web 工具
 
 [!\[Docker Pulls\](https://img.shields.io/badge/docker-ghcr.io-blue)](https://github.com/YEAHZERO/MediaInfoWebUI/pkgs/container/mediainfowebui)
-[!\[Version\](https://img.shields.io/badge/version-1.0.0-green)]()
+[!\[Version\](https://img.shields.io/badge/version-1.1.0-green)]()
 
 ## 目录
 
@@ -27,7 +27,7 @@
 
 - 📊 输出 MediaInfo 详细信息
 - 🎬 输出 BDInfo 蓝光原盘信息
-- 🎞️ 输出 mkvmerge 轨道信息
+- 🎞️ 输出 mkvmerge 轨道信息（支持自动查找BDMV和m2ts文件）
 - 📸 灵活的截图生成（支持自定义数量、字幕模式）
 - 🔗 图床链接生成与管理
 
@@ -49,6 +49,14 @@
 
 - 📄 **输出模式切换**：支持"精简报告"（提取 `[code]` 块）和"完整报告"
 - 🔧 **工作目录修复**：在源文件所在目录执行 BDInfo，解决相对路径问题
+- 🔍 **递归查找**：支持递归查找子目录中的 BDMV 和 ISO 文件
+
+### mkvmerge 轨道信息 🎞️
+
+- 🔍 **智能文件查找**：自动查找 BDMV 目录和最大的 m2ts 文件
+- 📁 **递归搜索**：支持在嵌套目录结构中查找视频文件
+- 🎯 **多格式支持**：支持 mkv、m2ts、mp4 等多种视频格式
+- 📊 **详细轨道信息**：显示视频、音频、字幕轨道详细信息
 
 ### BDInfo 高级功能 ✨
 
@@ -95,8 +103,9 @@
 
 | 镜像     | 地址                                       | 压缩后大小  |
 | :----- | :--------------------------------------- | :----- |
-| v1.0.0 | `ghcr.io/yeahzero/mediainfowebui:v1.0.0` | \~98MB |
-| latest | `ghcr.io/yeahzero/mediainfowebui:latest` | \~98MB |
+| v1.1.0 | `ghcr.io/yeahzero/mediainfowebui:v1.1.0` | ~111MB |
+| v1.0.0 | `ghcr.io/yeahzero/mediainfowebui:v1.0.0` | ~98MB |
+| latest | `ghcr.io/yeahzero/mediainfowebui:latest` | ~111MB |
 
 ```bash
 # 拉取镜像
@@ -436,6 +445,33 @@ docker compose up -d
 
 ## 更新日志
 
+### \[1.1.0] - 2026-04-04
+
+**新增**
+
+- mkvmerge 轨道信息查询功能
+  - 自动查找 BDMV 目录和最大的 m2ts 文件
+  - 支持递归搜索嵌套目录结构
+  - 支持多种视频格式（mkv、m2ts、mp4 等）
+- BDInfo 递归查找功能
+  - 支持递归查找子目录中的 BDMV 和 ISO 文件
+- 版本信息自动获取
+  - 从 git 自动获取版本号、构建时间和提交哈希
+  - 支持在 Docker 构建时传入版本信息
+
+**变更**
+
+- WebSocket 不再自动重连，避免无限重试
+- 轮询时不显示 loading 状态，避免按钮闪烁
+- Dockerfile 优化版本信息获取逻辑
+
+**修复**
+
+- WebSocket 连接失败导致的无限重连问题
+- BDInfo 在嵌套目录结构中无法找到 BDMV 的问题
+- mkvmerge 轨道信息功能无法正常工作的问题
+- 版本信息显示为 "dev" 的问题
+
 ### \[1.0.0] - 2026-04-02
 
 **新增**
@@ -478,21 +514,5 @@ docker compose up -d
 
 ***
 
-*最后更新：2026-04-02*
-
-```
-
----
-
-以上是完整修订版。主要改进包括：
-
-1. **统一端口**：全部使用 `28080`
-2. **添加目录导航**：长文档便于查阅
-3. **优化功能描述**：使用 emoji 和更清晰的层级
-4. **补充常见问题**：覆盖更多实际场景
-5. **添加 Makefile 内容**：解决命令引用问题
-6. **安全提示**：密码使用 `change_me` 而非 `your_password`
-7. **完善部署示例**：包含 `.env` 配置
-8. **添加许可证和相关链接**：完善文档完整性
-```
+*最后更新：2026-04-04*
 
