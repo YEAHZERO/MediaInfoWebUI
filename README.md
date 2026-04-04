@@ -3,7 +3,7 @@
 > 基于 [minfo](https://github.com/mirrorb/minfo) 改进的本地媒体信息检测 Web 工具
 
 [!\[Docker Pulls\](https://img.shields.io/badge/docker-ghcr.io-blue)](https://github.com/YEAHZERO/MediaInfoWebUI/pkgs/container/mediainfowebui)
-[!\[Version\](https://img.shields.io/badge/version-1.1.3-green)]()
+[!\[Version\](https://img.shields.io/badge/version-1.1.4-green)]()
 
 ## 目录
 
@@ -112,9 +112,6 @@
 
 | 镜像     | 地址                                       | 压缩后大小   |
 | :----- | :--------------------------------------- | :------ |
-| v1.1.3 | `ghcr.io/yeahzero/mediainfowebui:v1.1.3` | \~115MB |
-| v1.1.0 | `ghcr.io/yeahzero/mediainfowebui:v1.1.0` | \~111MB |
-| v1.0.0 | `ghcr.io/yeahzero/mediainfowebui:v1.0.0` | \~98MB  |
 | latest | `ghcr.io/yeahzero/mediainfowebui:latest` | \~115MB |
 
 ```bash
@@ -340,7 +337,7 @@ docker ps | grep minfo
 ### 基础 API
 
 | 端点                     | 方法   | 说明               |
-| ---------------------- | ---- | ---------------- |
+| :--------------------- | :--- | :--------------- |
 | `/api/mediainfo`       | POST | 获取 MediaInfo 信息  |
 | `/api/bdinfo`          | POST | 获取 BDInfo 信息     |
 | `/api/mkvmerge/tracks` | POST | 获取 mkvmerge 轨道信息 |
@@ -351,7 +348,7 @@ docker ps | grep minfo
 ### BDInfo 任务 API ✨
 
 | 端点                       | 方法   | 说明                |
-| ------------------------ | ---- | ----------------- |
+| :----------------------- | :--- | :---------------- |
 | `/api/bdinfo/playlists`  | POST | 获取 Playlist 列表和推荐 |
 | `/api/bdinfo/jobs`       | GET  | 获取历史任务列表          |
 | `/api/bdinfo/job/create` | POST | 创建扫描任务            |
@@ -465,7 +462,7 @@ sequenceDiagram
 ### 新增依赖
 
 | 包                            | 版本     | 说明           |
-| ---------------------------- | ------ | ------------ |
+| :--------------------------- | :----- | :----------- |
 | github.com/gorilla/websocket | v1.5.1 | WebSocket 支持 |
 
 ***
@@ -544,7 +541,15 @@ docker compose up -d
 
 ## 更新日志
 
-### [1.1.3] - 2026-04-04
+### \[1.1.4] - 2026-04-04
+
+**变更**
+
+- 移除所有硬编码的本地路径信息
+- 统一使用通用路径示例 `/path/to/your/media`
+- 优化文档中的路径配置示例
+
+### \[1.1.3] - 2026-04-04
 
 **新增**
 
@@ -559,7 +564,7 @@ docker compose up -d
 - 前端路径响应式更新问题
 - 手动选择模式下 Playlist 加载失败问题
 
-### [1.1.0] - 2026-04-04
+### \[1.1.0] - 2026-04-04
 
 **新增**
 
@@ -629,3 +634,6 @@ docker compose up -d
 ***
 
 *最后更新：2026-04-04*
+
+***
+
