@@ -125,7 +125,7 @@ docker pull ghcr.io/yeahzero/mediainfowebui:latest
 docker run -d \
    --network host \
    -v /lib/modules:/lib/modules:ro \
-   -v /qbittorrent/downloads:/media:ro \
+   -v /path/to/your/media:/media:ro \
    -e TZ=Asia/Shanghai \
    -e PORT=28080 \
    -e REQUEST_TIMEOUT=20m \
@@ -136,7 +136,7 @@ docker run -d \
 
 ### docker-compose 部署（推荐）
 
-**1. 创建 docker-compose.yml**
+**1. 创建 docker-compose.yml（端口映射模式）**
 
 ```yaml
 services:
@@ -148,13 +148,29 @@ services:
       - "28080:28080"
     environment:
       PORT: "28080"
-      WEB_USERNAME: "admin"
-      WEB_PASSWORD: "change_me"
       REQUEST_TIMEOUT: "20m"
     volumes:
       - /lib/modules:/lib/modules:ro
       - /path/to/your/media1:/media_path1:ro
       - /path/to/your/media2:/media_path2:ro
+    restart: unless-stopped
+```
+
+**1. 创建 docker-compose.yml（Host 网络模式）**
+
+```yaml
+services:
+  minfo:
+    image: ghcr.io/yeahzero/mediainfowebui:latest
+    container_name: minfo
+    privileged: true
+    network_mode: host
+    environment:
+      PORT: "28080"
+      REQUEST_TIMEOUT: "20m"
+    volumes:
+      - /lib/modules:/lib/modules:ro
+      - /qbittorrent/downloads:/media:ro
     restart: unless-stopped
 ```
 
@@ -243,6 +259,78 @@ docker-clean:
 ```bash
 make docker-build
 make docker-run
+```
+
+### 🚀 更新方法
+
+**使用 Docker 命令更新（端口映射模式）**
+
+```bash
+# 停止并删除旧容器
+docker stop minfo 2>/dev/null || true && docker rm minfo 2>/dev/null || true
+
+# 拉取最新镜像
+docker pull ghcr.io/yeahzero/mediainfowebui:latest
+
+# 启动新容器
+docker run -d \
+   -p 28080:28080 \
+   -v /lib/modules:/lib/modules:ro \
+   -v /path/to/your/media:/media:ro \
+   -e TZ=Asia/Shanghai \
+   -e PORT=28080 \
+   -e REQUEST_TIMEOUT=20m \
+   --name minfo \
+   --restart unless-stopped \
+   ghcr.io/yeahzero/mediainfowebui:latest
+```
+
+**使用 Docker 命令更新（Host 网络模式）**
+
+```bash
+# 删除可能存在的同名容器
+docker rm -f minfo
+
+# 清理网络残留
+docker network prune -f
+
+# 拉取最新镜像
+docker pull ghcr.io/yeahzero/mediainfowebui:latest
+
+# 使用 host 网络模式（绕过问题）
+docker run -d \
+   --network host \
+   -v /lib/modules:/lib/modules:ro \
+   -v /path/to/your/media:/media:ro \
+   -e TZ=Asia/Shanghai \
+   -e PORT=28080 \
+   -e REQUEST_TIMEOUT=20m \
+   --name minfo \
+   --restart unless-stopped \
+   ghcr.io/yeahzero/mediainfowebui:latest
+```
+
+**使用 docker-compose 更新**
+
+```bash
+# 拉取最新镜像
+docker-compose pull
+
+# 重新启动容器
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f
+```
+
+**检查更新状态**
+
+```bash
+# 查看容器版本
+docker inspect minfo | grep -A 5 "Image"
+
+# 查看容器状态
+docker ps | grep minfo
 ```
 
 ***
