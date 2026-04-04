@@ -1,4 +1,4 @@
-import { onMounted, onUnmounted, ref, computed } from "vue";
+import { onMounted, onUnmounted, ref, computed, watch } from "vue";
 import { createBDInfoWebSocket, fetchBDInfoJobs, fetchBDInfoJob, fetchBDInfoReport, createBDInfoJob, fetchBDInfoPlaylists } from "../api/media";
 
 export function useBDInfoJobs(path, hasInput) {
@@ -15,6 +15,20 @@ export function useBDInfoJobs(path, hasInput) {
     const wsConnected = ref(false);
     const pollingInterval = ref(null);
     const pollingEnabled = ref(false);
+
+    const currentPath = ref("");
+    const currentHasInput = ref(false);
+
+    watch(path, (newPath) => {
+        currentPath.value = newPath;
+        playlists.value = [];
+        recommendation.value = null;
+        selectedPlaylists.value = [];
+    }, { immediate: true });
+
+    watch(hasInput, (newHasInput) => {
+        currentHasInput.value = newHasInput;
+    }, { immediate: true });
 
     const hasActiveJob = computed(() => {
         if (!activeJob.value) return false;
@@ -162,13 +176,13 @@ export function useBDInfoJobs(path, hasInput) {
     };
 
     const loadPlaylists = async () => {
-        if (!hasInput.value) {
+        if (!currentHasInput.value) {
             return;
         }
         try {
             loadingPlaylists.value = true;
             error.value = "";
-            const data = await fetchBDInfoPlaylists(path.value.trim());
+            const data = await fetchBDInfoPlaylists(currentPath.value.trim());
             playlists.value = data.playlists || [];
             recommendation.value = data.recommendation || null;
 
@@ -185,7 +199,7 @@ export function useBDInfoJobs(path, hasInput) {
     };
 
     const startJob = async (customScanMode, customPlaylists) => {
-        if (!hasInput.value) {
+        if (!currentHasInput.value) {
             error.value = "请先选择媒体路径。";
             return null;
         }
@@ -195,7 +209,7 @@ export function useBDInfoJobs(path, hasInput) {
             error.value = "";
             const mode = customScanMode || scanMode.value;
             const mpls = customPlaylists || selectedPlaylists.value;
-            const job = await createBDInfoJob(path.value.trim(), mode, mpls);
+            const job = await createBDInfoJob(currentPath.value.trim(), mode, mpls);
             activeJob.value = job;
             jobs.value.unshift(job);
             return job;

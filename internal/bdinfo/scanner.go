@@ -81,8 +81,9 @@ func (s *Scanner) runJob(job *Job) {
 	args := s.buildArgs(job, bdPath, jobDir)
 
 	cmd := exec.CommandContext(ctx, s.jm.BinPath(), args...)
-	stdout, _ := cmd.StdoutPipe()
-	stderr, _ := cmd.StderrPipe()
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 
 	if err := cmd.Start(); err != nil {
 		job.Status = JobStatusError
@@ -91,9 +92,6 @@ func (s *Scanner) runJob(job *Job) {
 		s.jm.UpdateJob(job)
 		return
 	}
-
-	go s.parseProgress(stdout, job)
-	go s.parseProgress(stderr, job)
 
 	if err := cmd.Wait(); err != nil {
 		job.Status = JobStatusError
@@ -104,9 +102,10 @@ func (s *Scanner) runJob(job *Job) {
 	}
 
 	reportPath := filepath.Join(jobDir, "report.txt")
-	if data, err := os.ReadFile(reportPath); err == nil {
+	reportContent := stdout.String() + stderr.String()
+	if err := os.WriteFile(reportPath, []byte(reportContent), 0644); err == nil {
 		job.ReportPath = reportPath
-		job.Summary = s.extractSummary(string(data))
+		job.Summary = s.extractSummary(reportContent)
 	}
 
 	job.Status = JobStatusDone
@@ -116,7 +115,7 @@ func (s *Scanner) runJob(job *Job) {
 }
 
 func (s *Scanner) buildArgs(job *Job, bdPath, jobDir string) []string {
-	args := []string{bdPath, "--output", jobDir}
+	args := []string{bdPath}
 
 	switch job.ScanMode {
 	case "whole":

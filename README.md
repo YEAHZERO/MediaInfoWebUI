@@ -3,7 +3,7 @@
 > 基于 [minfo](https://github.com/mirrorb/minfo) 改进的本地媒体信息检测 Web 工具
 
 [!\[Docker Pulls\](https://img.shields.io/badge/docker-ghcr.io-blue)](https://github.com/YEAHZERO/MediaInfoWebUI/pkgs/container/mediainfowebui)
-[!\[Version\](https://img.shields.io/badge/version-1.1.0-green)]()
+[!\[Version\](https://img.shields.io/badge/version-1.1.3-green)]()
 
 ## 目录
 
@@ -61,9 +61,18 @@
 ### BDInfo 高级功能 ✨
 
 - 🎯 **智能 Playlist 选择**：自动推荐时长 > 10 分钟的主片 Playlist
-- 🔄 **三种扫描模式**：自动选择 / 手动选择 / 整盘扫描
+- 🔄 **三种扫描模式**：
+  - **自动选择**：自动检测并扫描推荐的 Playlist
+  - **手动选择**：加载所有 Playlist 供用户选择
+  - **整盘扫描**：扫描整个蓝光目录的所有内容
 - 📜 **历史任务管理**：支持历史报告回顾
 - ⚡ **实时进度推送**：WebSocket 实时推送扫描进度和 ETA
+- 🎨 **交互式界面**：
+  - **加载列表**：手动模式下加载 Playlist 列表
+  - **全选/清空**：快速选择或取消选择所有 Playlist
+  - **推荐**：一键选择系统推荐的 Playlist
+  - **主片标记**：自动标记时长 > 10 分钟的主片 Playlist
+  - **详细信息**：显示 Playlist 时长、大小等详细信息
 
 ### 前端体验
 
@@ -101,26 +110,28 @@
 
 🎉 **镜像已推送到 GitHub Container Registry！**
 
-| 镜像     | 地址                                       | 压缩后大小  |
-| :----- | :--------------------------------------- | :----- |
-| v1.1.0 | `ghcr.io/yeahzero/mediainfowebui:v1.1.0` | ~111MB |
-| v1.0.0 | `ghcr.io/yeahzero/mediainfowebui:v1.0.0` | ~98MB |
-| latest | `ghcr.io/yeahzero/mediainfowebui:latest` | ~111MB |
+| 镜像     | 地址                                       | 压缩后大小   |
+| :----- | :--------------------------------------- | :------ |
+| v1.1.3 | `ghcr.io/yeahzero/mediainfowebui:v1.1.3` | \~115MB |
+| v1.1.0 | `ghcr.io/yeahzero/mediainfowebui:v1.1.0` | \~111MB |
+| v1.0.0 | `ghcr.io/yeahzero/mediainfowebui:v1.0.0` | \~98MB  |
+| latest | `ghcr.io/yeahzero/mediainfowebui:latest` | \~115MB |
 
 ```bash
 # 拉取镜像
 docker pull ghcr.io/yeahzero/mediainfowebui:latest
 
-# 快速运行
+# 快速运行，使用不同容器名
 docker run -d \
-  --name minfo \
-  --privileged \
-  -p 28080:28080 \
-  -e WEB_USERNAME=admin \
-  -e WEB_PASSWORD=change_me \
-  -v /lib/modules:/lib/modules:ro \
-  -v /your/media/path:/media_path1:ro \
-  ghcr.io/yeahzero/mediainfowebui:latest
+   --network host \
+   -v /lib/modules:/lib/modules:ro \
+   -v /qbittorrent/downloads:/media:ro \
+   -e TZ=Asia/Shanghai \
+   -e PORT=28080 \
+   -e REQUEST_TIMEOUT=20m \
+   --name minfo-v1.1.3 \
+   --restart unless-stopped \
+   ghcr.io/yeahzero/mediainfowebui:v1.1.3
 ```
 
 ### docker-compose 部署（推荐）
@@ -240,14 +251,14 @@ make docker-run
 
 ### 基础 API
 
-| 端点                       | 方法   | 说明                  |
-| ------------------------ | ---- | ------------------- |
-| `/api/mediainfo`         | POST | 获取 MediaInfo 信息     |
-| `/api/bdinfo`            | POST | 获取 BDInfo 信息        |
-| `/api/mkvmerge/tracks`   | POST | 获取 mkvmerge 轨道信息   |
-| `/api/screenshots`       | POST | 生成截图                |
-| `/api/path`              | GET  | 路径浏览                |
-| `/api/version`           | GET  | 获取版本信息              |
+| 端点                     | 方法   | 说明               |
+| ---------------------- | ---- | ---------------- |
+| `/api/mediainfo`       | POST | 获取 MediaInfo 信息  |
+| `/api/bdinfo`          | POST | 获取 BDInfo 信息     |
+| `/api/mkvmerge/tracks` | POST | 获取 mkvmerge 轨道信息 |
+| `/api/screenshots`     | POST | 生成截图             |
+| `/api/path`            | GET  | 路径浏览             |
+| `/api/version`         | GET  | 获取版本信息           |
 
 ### BDInfo 任务 API ✨
 
@@ -445,7 +456,22 @@ docker compose up -d
 
 ## 更新日志
 
-### \[1.1.0] - 2026-04-04
+### [1.1.3] - 2026-04-04
+
+**新增**
+
+- BDInfo 高级交互式界面
+  - 三种扫描模式：自动选择、手动选择、整盘扫描
+  - Playlist 列表管理：加载、全选、清空、推荐
+  - 主片自动标记和详细信息显示
+
+**修复**
+
+- BDInfo Playlist 时长解析问题（支持单数字小时格式）
+- 前端路径响应式更新问题
+- 手动选择模式下 Playlist 加载失败问题
+
+### [1.1.0] - 2026-04-04
 
 **新增**
 
@@ -515,4 +541,3 @@ docker compose up -d
 ***
 
 *最后更新：2026-04-04*
-

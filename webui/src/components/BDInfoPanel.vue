@@ -126,7 +126,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from "vue";
+import { ref, watch, toRef } from "vue";
 import BDInfoJobHistory from "./BDInfoJobHistory.vue";
 import BDInfoJobProgress from "./BDInfoJobProgress.vue";
 import BDInfoPlaylistPicker from "./BDInfoPlaylistPicker.vue";
@@ -164,7 +164,7 @@ const {
     selectAllPlaylists,
     deselectAllPlaylists,
     selectRecommended,
-} = useBDInfoJobs(ref(props.path), ref(props.hasInput));
+} = useBDInfoJobs(toRef(props, 'path'), toRef(props, 'hasInput'));
 
 watch(loading, (val) => {
     emit("busy-change", val);

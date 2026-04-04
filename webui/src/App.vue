@@ -26,21 +26,9 @@
                 <div class="config-grid">
                     <div class="config-left">
                         <div class="field">
-                            <label class="field-label-muted">BDInfo 输出</label>
+                            <label class="field-label-muted">生成 BDInfo</label>
                             <BDInfoOutputPicker v-model="bdinfoMode" :busy="busy" />
                         </div>
-                        <div class="field field-full">
-                            <label class="field-label-muted">BDInfo 高级</label>
-                            <BDInfoPanel
-                                :path="path"
-                                :has-input="hasInput"
-                                :busy="busy"
-                                @notice="showNotice"
-                                @busy-change="handleBDInfoBusyChange"
-                            />
-                        </div>
-                    </div>
-                    <div class="config-right">
                         <div class="field">
                             <label class="field-label-muted">截图模式</label>
                             <ScreenshotVariantPicker v-model="screenshotVariant" :busy="busy" />
@@ -63,6 +51,18 @@
                                 :value="screenshotCount"
                                 @input="handleScreenshotCountInput"
                                 @blur="handleScreenshotCountBlur"
+                            />
+                        </div>
+                    </div>
+                    <div class="config-right">
+                        <div class="field field-full">
+                            <label class="field-label-muted">BDInfo 高级</label>
+                            <BDInfoPanel
+                                :path="path"
+                                :has-input="hasInput"
+                                :busy="busy"
+                                @notice="showNotice"
+                                @busy-change="handleBDInfoBusyChange"
                             />
                         </div>
                     </div>
