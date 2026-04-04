@@ -2,8 +2,8 @@
 
 > 基于 [minfo](https://github.com/mirrorb/minfo) 改进的本地媒体信息检测 Web 工具
 
-[!\[Docker Pulls\](https://img.shields.io/badge/docker-ghcr.io-blue)](https://github.com/YEAHZERO/MediaInfoWebUI/pkgs/container/mediainfowebui)
-[!\[Version\](https://img.shields.io/badge/version-1.1.4-green)]()
+[![Docker Pulls](https://img.shields.io/badge/Docker-GHCR-blue)](https://github.com/YEAHZERO/MediaInfoWebUI/pkgs/container/mediainfowebui)
+[![Version](https://img.shields.io/badge/version-1.1.4-green)](https://github.com/YEAHZERO/MediaInfoWebUI/releases/tag/v1.1.4)
 
 ## 目录
 
@@ -31,7 +31,7 @@
 - 📸 灵活的截图生成（支持自定义数量、字幕模式）
 - 🔗 图床链接生成与管理
 
-!\[minfo 截图]\(docs/images/screenshot.png)
+![minfo 截图](docs/images/screenshot.png)
 
 ***
 
