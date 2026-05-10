@@ -34,11 +34,18 @@ RUN BUILD_TIME=${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)} && \
     GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -buildvcs=false -ldflags="-s -w -X mediainfo/internal/httpapi/handlers.BuildTime=${BUILD_TIME} -X mediainfo/internal/httpapi/handlers.BuildVersion=${BUILD_VERSION} -X mediainfo/internal/httpapi/handlers.BuildCommit=${BUILD_COMMIT}" -o /out/mediainfo ./cmd/mediainfo
 
 # ============================================
-# Stage: 最终镜像
+# Stage: 最终镜像（使用 Ubuntu 作为基础，支持新版 mkvtoolnix）
 # ============================================
-FROM ghcr.io/mirrorb/minfo:latest AS runtime
+FROM ubuntu:24.04 AS runtime
 
-RUN apk add --no-cache mkvtoolnix
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    mediainfo \
+    mkvtoolnix \
+    ffmpeg \
+    ffprobe \
+    p7zip-full \
+    libudf0 \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY scripts/seedbox/ /usr/local/share/mediainfo/scripts/
 RUN chmod +x /usr/local/share/mediainfo/scripts/*.sh
