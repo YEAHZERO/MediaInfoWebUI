@@ -117,7 +117,29 @@
 
 ### 方式一：一行命令部署（快速尝鲜）
 
+**多标签镜像选择**：
+
+| 标签 | 描述 | 特点 |
+|------|------|------|
+| `:light` | 轻量版 | 无 mkvtoolnix，仅基础 mediainfo + 截图功能 |
+| `:latest` | 标准版（推荐） | 含旧版 mkvtoolnix（兼容旧 glibc），脚本引擎 |
+| `:native` | 全功能版 | 含新版 mkvtoolnix + Native 引擎（支持 HDR 色调映射） |
+
 ```bash
+# 轻量版（仅 mediainfo + 截图）
+docker run -d \
+  --name mediainfo \
+  --privileged \
+  -p 28888:28888 \
+  -e TZ=Asia/Shanghai \
+  -e PORT=28888 \
+  -e REQUEST_TIMEOUT=30m \
+  -v /lib/modules:/lib/modules:ro \
+  -v //home/live/qbittorrent/downloads:/media:ro \
+  --restart unless-stopped \
+  ghcr.io/yeahzero/mediainfowebui:light
+
+# 标准版（含 mkvtoolnix，兼容旧环境）
 docker run -d \
   --name mediainfo \
   --privileged \
@@ -129,6 +151,20 @@ docker run -d \
   -v //home/live/qbittorrent/downloads:/media:ro \
   --restart unless-stopped \
   ghcr.io/yeahzero/mediainfowebui:latest
+
+# 全功能版（Native 引擎，支持 HDR）
+docker run -d \
+  --name mediainfo \
+  --privileged \
+  -p 28888:28888 \
+  -e TZ=Asia/Shanghai \
+  -e PORT=28888 \
+  -e REQUEST_TIMEOUT=30m \
+  -e ENABLE_NATIVE_ENGINE=1 \
+  -v /lib/modules:/lib/modules:ro \
+  -v //home/live/qbittorrent/downloads:/media:ro \
+  --restart unless-stopped \
+  ghcr.io/yeahzero/mediainfowebui:native
 ```
 
 ### 方式二：docker-compose 部署（推荐）

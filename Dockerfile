@@ -34,17 +34,40 @@ RUN BUILD_TIME=${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)} && \
     GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -buildvcs=false -ldflags="-s -w -X mediainfo/internal/httpapi/handlers.BuildTime=${BUILD_TIME} -X mediainfo/internal/httpapi/handlers.BuildVersion=${BUILD_VERSION} -X mediainfo/internal/httpapi/handlers.BuildCommit=${BUILD_COMMIT}" -o /out/mediainfo ./cmd/mediainfo
 
 # ============================================
-# Stage: 最终镜像（使用 Debian 12 作为基础，支持新版 mkvtoolnix）
+# Stage: Go 后端构建（Native 版本，含 CGO）
 # ============================================
-FROM debian:bookworm-slim AS runtime
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS build-native
+WORKDIR /src
+COPY go.mod go.sum ./
+COPY *.go ./
+COPY cmd ./cmd
+COPY internal ./internal
+COPY --from=webui /app/dist ./webui/dist
+ARG TARGETOS
+ARG TARGETARCH
+ENV CGO_ENABLED=1
+ENV GOPROXY=https://goproxy.cn,direct
+ARG BUILD_TIME
+ARG BUILD_VERSION
+ARG BUILD_COMMIT
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apk add --no-cache gcc musl-dev libplacebo-dev && \
+    BUILD_TIME=${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)} && \
+    BUILD_VERSION=${BUILD_VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo "dev")} && \
+    BUILD_COMMIT=${BUILD_COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")} && \
+    GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -buildvcs=false -tags native -ldflags="-s -w -X mediainfo/internal/httpapi/handlers.BuildTime=${BUILD_TIME} -X mediainfo/internal/httpapi/handlers.BuildVersion=${BUILD_VERSION} -X mediainfo/internal/httpapi/handlers.BuildCommit=${BUILD_COMMIT}" -o /out/mediainfo ./cmd/mediainfo
+
+# ============================================
+# Stage: 轻量版镜像（无 mkvtoolnix，脚本引擎）
+# ============================================
+FROM alpine:3.20 AS runtime-light
+
+RUN apk add --no-cache \
     mediainfo \
-    mkvtoolnix \
     ffmpeg \
     p7zip-full \
     udftools \
-    && rm -rf /var/lib/apt/lists/*
+    kmod
 
 COPY scripts/seedbox/ /usr/local/share/mediainfo/scripts/
 RUN chmod +x /usr/local/share/mediainfo/scripts/*.sh
@@ -55,4 +78,57 @@ RUN chmod +x /usr/local/bin/mediainfo
 WORKDIR /app
 ENV PORT=28888
 ENV MEDIAINFO_BIN=/usr/bin/mediainfo
+ENV ENGINE_TYPE=script
+ENTRYPOINT ["/usr/local/bin/mediainfo"]
+
+# ============================================
+# Stage: 标准版镜像（含旧版 mkvtoolnix，脚本引擎）
+# ============================================
+FROM alpine:3.20 AS runtime-standard
+
+RUN apk add --no-cache \
+    mediainfo \
+    ffmpeg \
+    p7zip-full \
+    udftools \
+    kmod \
+    mkvtoolnix=82.0-r0
+
+COPY scripts/seedbox/ /usr/local/share/mediainfo/scripts/
+RUN chmod +x /usr/local/share/mediainfo/scripts/*.sh
+
+COPY --from=build /out/mediainfo /usr/local/bin/mediainfo
+RUN chmod +x /usr/local/bin/mediainfo
+
+WORKDIR /app
+ENV PORT=28888
+ENV MEDIAINFO_BIN=/usr/bin/mediainfo
+ENV ENGINE_TYPE=script
+ENTRYPOINT ["/usr/local/bin/mediainfo"]
+
+# ============================================
+# Stage: Native 版镜像（含新版 mkvtoolnix，Native 引擎）
+# ============================================
+FROM alpine:3.20 AS runtime-native
+
+RUN apk add --no-cache \
+    mediainfo \
+    ffmpeg \
+    p7zip-full \
+    udftools \
+    kmod \
+    mkvtoolnix \
+    libplacebo
+
+COPY scripts/seedbox/ /usr/local/share/mediainfo/scripts/
+RUN chmod +x /usr/local/share/mediainfo/scripts/*.sh
+
+COPY --from=build-native /out/mediainfo /usr/local/bin/mediainfo
+RUN chmod +x /usr/local/bin/mediainfo
+
+WORKDIR /app
+ENV PORT=28888
+ENV MEDIAINFO_BIN=/usr/bin/mediainfo
+ENV ENGINE_TYPE=native
+ENV ENABLE_NATIVE_ENGINE=1
 ENTRYPOINT ["/usr/local/bin/mediainfo"]
