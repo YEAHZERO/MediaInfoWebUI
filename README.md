@@ -235,17 +235,17 @@ docker rm -f mediainfo 2>/dev/null; docker run -d \
 
 ### 配置参考
 
-| 环境变量                            | 默认值        | 说明                             |
-| ------------------------------- | ---------- | ------------------------------ |
-| `PORT`                          | `28888`    | 服务端口                           |
-| `TZ`                            | `UTC`      | 时区                             |
-| `REQUEST_TIMEOUT`               | `20m`      | 请求超时（大文件建议 `30m`）              |
-| `ENGINE_TYPE` | `script` | 截图引擎类型：`script`（脚本引擎，轻量）或 `native`（原生引擎，全功能）
-| `ENABLE_NATIVE_ENGINE` | `0` | 启用原生截图引擎（等同于 `ENGINE_TYPE=native`）            |
-| `SCREENSHOT_COMPRESS_THRESHOLD` | `10485760` | 截图压缩阈值（字节）                     |
-| `SCREENSHOT_COMPRESS_STRATEGY`  | `auto`     | 压缩策略：`lossless`/`lossy`/`auto` |
-| `OXIPNG_BIN`                    | `oxipng`   | oxipng 路径                      |
-| `PNGQUANT_BIN`                  | `pngquant` | pngquant 路径                    |
+| 环境变量                            | 默认值        | 说明                                           |
+| ------------------------------- | ---------- | -------------------------------------------- |
+| `PORT`                          | `28888`    | 服务端口                                         |
+| `TZ`                            | `UTC`      | 时区                                           |
+| `REQUEST_TIMEOUT`               | `20m`      | 请求超时（大文件建议 `30m`）                            |
+| `ENGINE_TYPE`                   | `script`   | 截图引擎类型：`script`（脚本引擎，轻量）或 `native`（原生引擎，全功能） |
+| `ENABLE_NATIVE_ENGINE`          | `0`        | 启用原生截图引擎（等同于 `ENGINE_TYPE=native`）           |
+| `SCREENSHOT_COMPRESS_THRESHOLD` | `10485760` | 截图压缩阈值（字节）                                   |
+| `SCREENSHOT_COMPRESS_STRATEGY`  | `auto`     | 压缩策略：`lossless`/`lossy`/`auto`               |
+| `OXIPNG_BIN`                    | `oxipng`   | oxipng 路径                                    |
+| `PNGQUANT_BIN`                  | `pngquant` | pngquant 路径                                  |
 
 ***
 
@@ -494,8 +494,8 @@ export REQUEST_TIMEOUT=30m
 
 ### 编译优化建议
 
-| 场景           | 命令                                                     | 说明                  |
-| ------------ | ------------------------------------------------------ | ------------------- |
+| 场景           | 命令                                                             | 说明                  |
+| ------------ | -------------------------------------------------------------- | ------------------- |
 | 默认轻量         | `go build -o mediainfo ./cmd/mediainfo`                        | 无 CGO，脚本引擎          |
 | 启用 WebSocket | `go build -tags websocket -o mediainfo ./cmd/mediainfo`        | 启用 BDInfo 实时推送      |
 | 原生截图引擎       | `go build -tags native,websocket -o mediainfo ./cmd/mediainfo` | 需要 CGO + libplacebo |
@@ -510,15 +510,7 @@ export REQUEST_TIMEOUT=30m
 
 ## 更新日志
 
-### \[1.3.0] - 2026-05-10
-
-**新增 - 5 大核心特性升级**
-
-**实时进度系统**
-
-- Heartbeat goroutine 每 500ms 推送进度事件（Phase/Current/Total/Message）
-
-### [1.4.0] - 2026-05-10
+### \[1.4.0] - 2026-05-10
 
 **修复 - 字幕截图体积优化**
 
@@ -544,9 +536,16 @@ export REQUEST_TIMEOUT=30m
 - 新增 `ENGINE_TYPE` 环境变量选择引擎：`script`（默认，轻量）或 `native`（全功能）
 - 兼容旧的 `ENABLE_NATIVE_ENGINE=1` 配置
 - 端口默认从 28080 改为 28888
-
 - ScreenshotEngine 接口支持 `ProgressCallback` 回调
 - ScriptEngine + NativeEngine 均支持进度通知
+
+### \[1.3.0] - 2026-05-10
+
+**新增 - 5 大核心特性升级**
+
+**实时进度系统**
+
+- Heartbeat goroutine 每 500ms 推送进度事件（Phase/Current/Total/Message）
 
 **Coarse+Fine 双阶段 Seek**
 
