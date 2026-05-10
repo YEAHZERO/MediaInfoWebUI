@@ -485,30 +485,56 @@ go build -o mediainfo ./cmd/mediainfo
 
 ### Docker 全量部署（推荐）
 
-#### 方式一：本地构建
+#### 方式一：本地构建（完整更新流程）
 
 ```bash
-# 进入项目目录
+#!/bin/bash
+
+# 1. 进入项目目录
 cd /path/to/MediaInfoWebUI
 
-# 拉取最新代码
-git pull
+# 2. 拉取最新代码
+git pull origin main
 
-# 重新构建镜像
-docker build --network=host -t mediainfowebui:native .
+# 3. 停止并删除旧容器
+docker stop mediainfo 2>/dev/null
+docker rm mediainfo 2>/dev/null
 
-# 启动容器
-docker rm -f mediainfo 2>/dev/null
-docker run -d --name mediainfo --privileged --network host \
-  -e TZ=Asia/Shanghai -e PORT=28888 -e REQUEST_TIMEOUT=30m \
-  -e ENABLE_NATIVE_ENGINE=1 -e MEDIAINFO_BIN=/usr/bin/mediainfo \
+# 4. 删除旧镜像（强制）
+docker rmi -f mediainfowebui:native 2>/dev/null
+
+# 5. 清理构建缓存
+docker builder prune -f
+
+# 6. 重新构建（不使用缓存，确保最新）
+docker build --network=host --no-cache -t mediainfowebui:native .
+
+# 7. 运行新容器
+docker run -d \
+  --name mediainfo \
+  --privileged \
+  --network host \
+  -e TZ=Asia/Shanghai \
+  -e PORT=28888 \
+  -e REQUEST_TIMEOUT=30m \
+  -e ENABLE_NATIVE_ENGINE=1 \
+  -e MEDIAINFO_BIN=/usr/bin/mediainfo \
   -v /lib/modules:/lib/modules:ro \
   -v /home/live/qbittorrent/downloads:/media:ro \
   --restart unless-stopped \
   mediainfowebui:native
+
+# 8. 查看日志验证启动
+docker logs mediainfo --tail 20
 ```
 
-#### 方式二：使用远程镜像
+#### 方式二：一行命令快速更新
+
+```bash
+cd /path/to/MediaInfoWebUI && git pull && docker stop mediainfo && docker rm mediainfo && docker rmi -f mediainfowebui:native && docker build --network=host --no-cache -t mediainfowebui:native . && docker run -d --name mediainfo --privileged --network host -e TZ=Asia/Shanghai -e PORT=28888 -e REQUEST_TIMEOUT=30m -e ENABLE_NATIVE_ENGINE=1 -e MEDIAINFO_BIN=/usr/bin/mediainfo -v /lib/modules:/lib/modules:ro -v /home/live/qbittorrent/downloads:/media:ro --restart unless-stopped mediainfowebui:native
+```
+
+#### 方式三：使用远程镜像
 
 ```bash
 # 启动容器（直接使用 GHCR 镜像）
@@ -521,6 +547,52 @@ docker run -d --name mediainfo --privileged --network host \
   --restart unless-stopped \
   ghcr.io/yeahzero/mediainfowebui:latest
 ```
+
+#### 检查更新是否成功
+
+```bash
+# 查看镜像创建时间（确认是最新）
+docker images | grep mediainfowebui
+
+# 查看容器启动时间
+docker ps | grep mediainfo
+
+# 测试服务是否正常
+curl http://localhost:28888
+
+# 查看实时日志
+docker logs -f mediainfo
+```
+
+#### 版本标签管理（建议）
+
+为了避免混淆，建议使用版本标签：
+
+```bash
+# 构建时带日期标签
+docker build --network=host -t mediainfowebui:$(date +%Y%m%d) .
+docker tag mediainfowebui:$(date +%Y%m%d) mediainfowebui:latest
+
+# 运行新版本（保留历史版本便于回滚）
+docker run -d --name mediainfo-$(date +%Y%m%d) ...
+```
+
+#### 注意事项
+
+1. **MediaInfo 二进制路径**：确认 `/usr/bin/mediainfo` 是否存在
+   ```bash
+   which mediainfo
+   ```
+
+2. **如果构建失败**，先测试构建：
+   ```bash
+   docker build --network=host --no-cache -t mediainfowebui:test .
+   ```
+
+3. **端口说明**：
+   - **minfo**（原项目）: 默认使用端口 28080
+   - **mediainfo**（本项目）: 默认使用端口 28888
+   - 两个服务不会冲突，可以同时运行
 
 ### 直接运行（开发调试）
 
