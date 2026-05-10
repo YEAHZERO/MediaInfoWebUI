@@ -483,6 +483,29 @@ go build -o mediainfo ./cmd/mediainfo
 ./mediainfo -version
 ```
 
+### Docker 全量部署（推荐）
+
+```bash
+# 进入项目目录
+cd /path/to/MediaInfoWebUI
+
+# 拉取最新代码
+git pull
+
+# 重新构建镜像
+docker build --network=host -t mediainfowebui:native .
+
+# 启动容器
+docker rm -f mediainfo 2>/dev/null
+docker run -d --name mediainfo --privileged --network host \
+  -e TZ=UTC -e PORT=28888 -e REQUEST_TIMEOUT=30m \
+  -e ENABLE_NATIVE_ENGINE=1 -e MEDIAINFO_BIN=/usr/bin/mediainfo \
+  -v /lib/modules:/lib/modules:ro \
+  -v /home/live/qbittorrent/downloads:/media:ro \
+  --restart unless-stopped \
+  mediainfowebui:native
+```
+
 ### 直接运行（开发调试）
 
 ```bash
