@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"minfo/internal/config"
+	"mediainfo/internal/config"
 )
 
 func MediaRoots() []string {

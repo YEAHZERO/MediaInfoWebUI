@@ -11,10 +11,10 @@ import (
 	"regexp"
 	"strings"
 
-	"minfo/internal/config"
-	"minfo/internal/httpapi/transport"
-	"minfo/internal/media"
-	"minfo/internal/system"
+	"mediainfo/internal/config"
+	"mediainfo/internal/httpapi/transport"
+	"mediainfo/internal/media"
+	"mediainfo/internal/system"
 )
 
 func MediaInfoHandler(envKey, fallback string) http.HandlerFunc {

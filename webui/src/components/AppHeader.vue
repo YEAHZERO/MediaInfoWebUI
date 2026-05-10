@@ -2,7 +2,7 @@
     <header class="hero">
         <div>
             <p class="kicker">本地媒体检测</p>
-            <h1>minfo</h1>
+            <h1>mediainfo</h1>
             <p class="lead">一键生成 MediaInfo / BDInfo，可下载截图或输出图床链接。</p>
         </div>
         <div class="hero-right">

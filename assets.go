@@ -1,4 +1,4 @@
-package minfo
+package mediainfo
 
 import (
 	"embed"

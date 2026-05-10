@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"minfo/internal/screenshot/engine"
-	"minfo/internal/system"
+	"mediainfo/internal/screenshot/engine"
+	"mediainfo/internal/system"
 )
 
 const (
@@ -24,7 +24,7 @@ const (
 )
 
 type ScriptResult struct {
-	Files []string
+	Files []engine.ScreenshotFileInfo
 	Logs  string
 }
 
@@ -151,7 +151,7 @@ func CompressAllScreenshots(ctx context.Context, files []string, threshold int64
 }
 
 func resolveUploadScript() (string, error) {
-	const scriptDir = "/usr/local/share/minfo/scripts"
+	const scriptDir = "/usr/local/share/mediainfo/scripts"
 	const name = "PixhostUpload.sh"
 
 	if value := strings.TrimSpace(os.Getenv("SCREENSHOT_UPLOAD_SCRIPT")); value != "" {

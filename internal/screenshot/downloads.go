@@ -28,7 +28,7 @@ var preparedDownloads = struct {
 func SavePreparedDownload(data []byte) (string, error) {
 	prunePreparedDownloads(time.Now())
 
-	file, err := os.CreateTemp("", "minfo-download-*.zip")
+	file, err := os.CreateTemp("", "mediainfo-download-*.zip")
 	if err != nil {
 		return "", err
 	}

@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"minfo/internal/system"
+	"mediainfo/internal/system"
 )
 
 var subtitleHandlers = map[string]SubtitleHandler{

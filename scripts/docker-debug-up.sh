@@ -13,7 +13,7 @@ fi
 
 MODE="${1:-dlv}"
 LOCK_DIR="${TMPDIR:-/tmp}/minfo-docker-debug.lock"
-PORT_VALUE="${PORT:-28080}"
+PORT_VALUE="${PORT:-28888}"
 DLV_HOST_PORT_VALUE="${DLV_HOST_PORT:-2345}"
 DEBUG_SERVICE="${DEBUG_SERVICE:-minfo-debug}"
 

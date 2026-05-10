@@ -6,8 +6,8 @@ import (
 	"io/fs"
 	"net/http"
 
-	"minfo/internal/httpapi/handlers"
-	"minfo/internal/httpapi/middleware"
+	"mediainfo/internal/httpapi/handlers"
+	"mediainfo/internal/httpapi/middleware"
 )
 
 func NewHandler(assets fs.FS) http.Handler {

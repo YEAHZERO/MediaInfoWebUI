@@ -13,8 +13,8 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"minfo/internal/bdinfo"
-	"minfo/internal/httpapi/transport"
+	"mediainfo/internal/bdinfo"
+	"mediainfo/internal/httpapi/transport"
 )
 
 var (

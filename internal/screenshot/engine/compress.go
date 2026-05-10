@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"minfo/internal/system"
+	"mediainfo/internal/system"
 )
 
 const (

@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"minfo/internal/config"
-	"minfo/internal/system"
+	"mediainfo/internal/config"
+	"mediainfo/internal/system"
 )
 
 func mountISO(ctx context.Context, isoPath string) (string, func(), error) {
@@ -20,7 +20,7 @@ func mountISO(ctx context.Context, isoPath string) (string, func(), error) {
 		return "", func() {}, err
 	}
 
-	mountDir, err := os.MkdirTemp("", "minfo-iso-mount-*")
+	mountDir, err := os.MkdirTemp("", "mediainfo-iso-mount-*")
 	if err != nil {
 		return "", func() {}, err
 	}

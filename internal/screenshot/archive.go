@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 )
 
-func ZipFiles(paths []string) ([]byte, error) {
+func ZipFiles(files []ScreenshotFileInfo) ([]byte, error) {
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 
-	for _, path := range paths {
-		file, err := os.Open(path)
+	for _, sf := range files {
+		file, err := os.Open(sf.Path)
 		if err != nil {
 			_ = zw.Close()
 			return nil, err
@@ -30,7 +30,7 @@ func ZipFiles(paths []string) ([]byte, error) {
 			_ = zw.Close()
 			return nil, err
 		}
-		header.Name = filepath.Base(path)
+		header.Name = sf.Name
 		header.Method = zip.Deflate
 		writer, err := zw.CreateHeader(header)
 		if err != nil {
@@ -50,4 +50,10 @@ func ZipFiles(paths []string) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+type ScreenshotFileInfo struct {
+	Path string
+	Name string
+	Size int64
 }

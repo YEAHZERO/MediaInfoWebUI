@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"minfo/internal/system"
+	"mediainfo/internal/system"
 )
 
 func DetectColorSpace(ctx context.Context, sourcePath string) (*ColorSpaceInfo, error) {

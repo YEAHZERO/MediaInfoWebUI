@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"minfo/internal/media"
+	"mediainfo/internal/media"
 )
 
 type Scanner struct {

@@ -3,7 +3,7 @@
 > 基于 [minfo](https://github.com/mirrorb/minfo) 改进的本地媒体信息检测 Web 工具
 
 [![Docker Pulls](https://img.shields.io/badge/Docker-GHCR-blue)](https://github.com/YEAHZERO/MediaInfoWebUI/pkgs/container/mediainfowebui)
-[![Version](https://img.shields.io/badge/version-1.3.0-green)](https://github.com/YEAHZERO/MediaInfoWebUI/releases/tag/v1.3.0)
+[![Version](https://img.shields.io/badge/version-1.4.0-green)](https://github.com/YEAHZERO/MediaInfoWebUI/releases/tag/v1.3.0)
 
 ## 目录
 
@@ -119,11 +119,11 @@
 
 ```bash
 docker run -d \
-  --name minfo \
+  --name mediainfo \
   --privileged \
-  -p 28080:28080 \
+  -p 28888:28888 \
   -e TZ=Asia/Shanghai \
-  -e PORT=28080 \
+  -e PORT=28888 \
   -e REQUEST_TIMEOUT=30m \
   -v /lib/modules:/lib/modules:ro \
   -v //home/live/qbittorrent/downloads:/media:ro \
@@ -137,15 +137,15 @@ docker run -d \
 
 ```yaml
 services:
-  minfo:
+  mediainfo:
     image: ghcr.io/yeahzero/mediainfowebui:latest
-    container_name: minfo
+    container_name: mediainfo
     privileged: true
     ports:
-      - "28080:28080"
+      - "28888:28888"
     environment:
       TZ: "Asia/Shanghai"
-      PORT: "28080"
+      PORT: "28888"
       REQUEST_TIMEOUT: "30m"
       # 截图引擎（可选，详见配置参考）
       # ENABLE_NATIVE_ENGINE: "1"
@@ -156,7 +156,7 @@ services:
       - //home/live/qbittorrent/downloads:/media:ro
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:28080/api/version"]
+      test: ["CMD", "curl", "-f", "http://localhost:28888/api/version"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -193,7 +193,7 @@ docker build --network=host -t mediainfowebui:latest .
 
 ```bash
 # 1. 编译带 native 支持的二进制（需要 CGO 环境）
-CGO_ENABLED=1 go build -tags native -o minfo ./cmd/minfo
+CGO_ENABLED=1 go build -tags native -o mediainfo ./cmd/mediainfo
 
 # 2. 打包进 Docker 镜像
 docker build --network=host -t mediainfowebui:native .
@@ -205,20 +205,20 @@ docker build --network=host -t mediainfowebui:native .
 
 ```bash
 # 标准镜像
-docker run -d --name minfo --privileged --network host \
-  -e TZ=UTC -e PORT=28080 -e REQUEST_TIMEOUT=30m \
+docker run -d --name mediainfo --privileged --network host \
+  -e TZ=UTC -e PORT=28888 -e REQUEST_TIMEOUT=30m \
   -v /lib/modules:/lib/modules:ro \
   -v /home/live/qbittorrent/downloads:/media:ro \
   --restart unless-stopped \
   mediainfowebui:latest
 
 # 全量镜像（native）
-docker rm -f minfo 2>/dev/null; docker run -d \
-  --name minfo \
+docker rm -f mediainfo 2>/dev/null; docker run -d \
+  --name mediainfo \
   --privileged \
   --network host \
   -e TZ=UTC \
-  -e PORT=28080 \
+  -e PORT=28888 \
   -e REQUEST_TIMEOUT=30m \
   -e ENABLE_NATIVE_ENGINE=1 \
   -e SCREENSHOT_COMPRESS_THRESHOLD=10485760 \
@@ -231,16 +231,17 @@ docker rm -f minfo 2>/dev/null; docker run -d \
 
 ### 访问服务
 
-打开浏览器访问 `http://你的服务器IP:28080`
+打开浏览器访问 `http://你的服务器IP:28888`
 
 ### 配置参考
 
 | 环境变量                            | 默认值        | 说明                             |
 | ------------------------------- | ---------- | ------------------------------ |
-| `PORT`                          | `28080`    | 服务端口                           |
+| `PORT`                          | `28888`    | 服务端口                           |
 | `TZ`                            | `UTC`      | 时区                             |
 | `REQUEST_TIMEOUT`               | `20m`      | 请求超时（大文件建议 `30m`）              |
-| `ENABLE_NATIVE_ENGINE`          | `0`        | 启用 Go 原生截图引擎（需特殊镜像）            |
+| `ENGINE_TYPE` | `script` | 截图引擎类型：`script`（脚本引擎，轻量）或 `native`（原生引擎，全功能）
+| `ENABLE_NATIVE_ENGINE` | `0` | 启用原生截图引擎（等同于 `ENGINE_TYPE=native`）            |
 | `SCREENSHOT_COMPRESS_THRESHOLD` | `10485760` | 截图压缩阈值（字节）                     |
 | `SCREENSHOT_COMPRESS_STRATEGY`  | `auto`     | 压缩策略：`lossless`/`lossy`/`auto` |
 | `OXIPNG_BIN`                    | `oxipng`   | oxipng 路径                      |
@@ -395,13 +396,13 @@ sequenceDiagram
 
 ```bash
 # 检查容器状态
-docker ps | grep minfo
+docker ps | grep mediainfo
 
 # 查看容器日志
-docker logs minfo
+docker logs mediainfo
 
 # 检查端口监听
-netstat -tlnp | grep 28080
+netstat -tlnp | grep 28888
 ```
 
 ### Q: WebSocket 连接失败？
@@ -410,7 +411,7 @@ netstat -tlnp | grep 28080
 
 ```nginx
 location /api/bdinfo/ws {
-    proxy_pass http://localhost:28080;
+    proxy_pass http://localhost:28888;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
@@ -423,7 +424,7 @@ location /api/bdinfo/ws {
 **A**: 检查容器是否以 `--privileged` 模式运行：
 
 ```bash
-docker inspect minfo | grep Privileged
+docker inspect mediainfo | grep Privileged
 # 应输出 "Privileged": true
 ```
 
@@ -473,36 +474,36 @@ git log --oneline HEAD~10..HEAD
 go mod tidy
 
 # 标准编译（默认 ScriptEngine，零 CGO 依赖）
-go build -o minfo ./cmd/minfo
+go build -o mediainfo ./cmd/mediainfo
 
 # 可选：启用 NativeEngine 编译（需要 CGO + libplacebo-dev）
-# go build -tags native -o minfo ./cmd/minfo
+# go build -tags native -o mediainfo ./cmd/mediainfo
 
 # 验证编译成功
-./minfo -version
+./mediainfo -version
 ```
 
 ### 直接运行（开发调试）
 
 ```bash
-export PORT=28080
+export PORT=28888
 export MEDIA_ROOTS=/path/to/media
 export REQUEST_TIMEOUT=30m
-./minfo
+./mediainfo
 ```
 
 ### 编译优化建议
 
 | 场景           | 命令                                                     | 说明                  |
 | ------------ | ------------------------------------------------------ | ------------------- |
-| 默认轻量         | `go build -o minfo ./cmd/minfo`                        | 无 CGO，脚本引擎          |
-| 启用 WebSocket | `go build -tags websocket -o minfo ./cmd/minfo`        | 启用 BDInfo 实时推送      |
-| 原生截图引擎       | `go build -tags native,websocket -o minfo ./cmd/minfo` | 需要 CGO + libplacebo |
+| 默认轻量         | `go build -o mediainfo ./cmd/mediainfo`                        | 无 CGO，脚本引擎          |
+| 启用 WebSocket | `go build -tags websocket -o mediainfo ./cmd/mediainfo`        | 启用 BDInfo 实时推送      |
+| 原生截图引擎       | `go build -tags native,websocket -o mediainfo ./cmd/mediainfo` | 需要 CGO + libplacebo |
 
 > **注意**：编译时加上 `-ldflags="-s -w"` 可以减小二进制体积：
 >
 > ```bash
-> go build -ldflags="-s -w" -o minfo ./cmd/minfo
+> go build -ldflags="-s -w" -o mediainfo ./cmd/mediainfo
 > ```
 
 ***
@@ -516,6 +517,34 @@ export REQUEST_TIMEOUT=30m
 **实时进度系统**
 
 - Heartbeat goroutine 每 500ms 推送进度事件（Phase/Current/Total/Message）
+
+### [1.4.0] - 2026-05-10
+
+**修复 - 字幕截图体积优化**
+
+- 根因：强制使用 `-pix_fmt yuv420p10le`（10-bit）导致 PNG 文件体积膨胀 2-3 倍
+- 修复：SDR 内容使用 8-bit `yuv420p`，HDR 内容需要 tone mapping 时才用 10-bit
+- PGS 合成命令全部强制 8-bit 输出，大幅减少文件体积
+
+**新增 - 截图文件大小显示**
+
+- 后端新增 `ScreenshotFileInfo` 结构，返回文件名和大小
+- 前端下载截图后在输出面板显示文件列表及大小
+- 图床链接面板显示每张截图的原始大小
+
+**重构 - 命名统一为 mediainfo**
+
+- 项目内部所有命名从 `minfo` 统一为 `mediainfo`
+- 包名、模块名、编译输出、临时目录前缀等全部统一
+- 保留对源项目 `mirrorb/minfo` 的引用和感谢
+
+**新增 - Docker 镜像全量安装**
+
+- 镜像同时包含标准版本和 native 版本二进制
+- 新增 `ENGINE_TYPE` 环境变量选择引擎：`script`（默认，轻量）或 `native`（全功能）
+- 兼容旧的 `ENABLE_NATIVE_ENGINE=1` 配置
+- 端口默认从 28080 改为 28888
+
 - ScreenshotEngine 接口支持 `ProgressCallback` 回调
 - ScriptEngine + NativeEngine 均支持进度通知
 
@@ -542,7 +571,7 @@ export REQUEST_TIMEOUT=30m
 - CGO 绑定的 libplacebo 色彩空间转换管道
 - 支持 HDR10、HDR10+、Dolby Vision Profile 5/7/8
 - vulkan 后端，高质量 HDR→SDR tone mapping
-- 编译：`CGO_ENABLED=1 go build -tags native -o minfo ./cmd/minfo`
+- 编译：`CGO_ENABLED=1 go build -tags native -o mediainfo ./cmd/mediainfo`
 - Docker 镜像：`docker build --network=host -t mediainfowebui:native .`
 
 **优化**

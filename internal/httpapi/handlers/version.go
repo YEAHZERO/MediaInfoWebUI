@@ -3,7 +3,7 @@ package handlers
 import (
 	"net/http"
 
-	"minfo/internal/httpapi/transport"
+	"mediainfo/internal/httpapi/transport"
 )
 
 var (

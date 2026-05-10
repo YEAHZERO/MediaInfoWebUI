@@ -1,7 +1,7 @@
 services:
-  minfo:
-    image: ${MINFO_IMAGE:-minfo-local}
-    container_name: ${MINFO_CONTAINER_NAME:-minfo-local}
+  mediainfo:
+    image: ${MEDIAINFO_IMAGE:-mediainfo-local}
+    container_name: ${MEDIAINFO_CONTAINER_NAME:-mediainfo-local}
     build:
       context: .
       target: runtime
@@ -12,9 +12,9 @@ services:
         https_proxy: "${https_proxy:-}"
     privileged: true
     ports:
-      - "${HOST_PORT:-28080}:${PORT:-28080}"
+      - "${HOST_PORT:-28888}:${PORT:-28888}"
     environment:
-      PORT: "${PORT:-28080}"
+      PORT: "${PORT:-28888}"
       REQUEST_TIMEOUT: "${REQUEST_TIMEOUT:-20m}"
       WEB_USERNAME: "${WEB_USERNAME:-}"
       WEB_PASSWORD: "${WEB_PASSWORD:-}"

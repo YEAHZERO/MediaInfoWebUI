@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"minfo/internal/config"
+	"mediainfo/internal/config"
 )
 
 func ResolveBin(envKey, fallback string) (string, error) {
@@ -31,14 +31,14 @@ func runCommand(ctx context.Context, dir, bin string, args ...string) (string, s
 	cmd.Dir = dir
 	setCommandProcessGroup(cmd)
 
-	stdoutFile, err := os.CreateTemp("", "minfo-stdout-*")
+	stdoutFile, err := os.CreateTemp("", "mediainfo-stdout-*")
 	if err != nil {
 		return "", "", err
 	}
 	defer os.Remove(stdoutFile.Name())
 	defer stdoutFile.Close()
 
-	stderrFile, err := os.CreateTemp("", "minfo-stderr-*")
+	stderrFile, err := os.CreateTemp("", "mediainfo-stderr-*")
 	if err != nil {
 		return "", "", err
 	}

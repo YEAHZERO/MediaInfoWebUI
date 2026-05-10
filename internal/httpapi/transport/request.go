@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"minfo/internal/config"
+	"mediainfo/internal/config"
 )
 
 func EnsurePost(w http.ResponseWriter, r *http.Request) bool {
@@ -49,7 +49,7 @@ func InputPath(r *http.Request) (string, func(), error) {
 	}
 	defer file.Close()
 
-	tempDir, err := os.MkdirTemp("", "minfo-upload-*")
+	tempDir, err := os.MkdirTemp("", "mediainfo-upload-*")
 	if err != nil {
 		return "", func() {}, err
 	}

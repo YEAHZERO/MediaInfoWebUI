@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"strings"
 
-	"minfo/internal/config"
-	"minfo/internal/httpapi/transport"
-	"minfo/internal/media"
+	"mediainfo/internal/config"
+	"mediainfo/internal/httpapi/transport"
+	"mediainfo/internal/media"
 )
 
 func PathSuggestHandler(w http.ResponseWriter, r *http.Request) {

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"minfo/internal/media"
-	"minfo/internal/system"
+	"mediainfo/internal/media"
+	"mediainfo/internal/system"
 )
 
 type scriptEngine struct {
@@ -20,7 +20,7 @@ type scriptEngine struct {
 
 func newScriptEngine() *scriptEngine {
 	return &scriptEngine{
-		screenshotScriptDir: "/usr/local/share/minfo/scripts",
+		screenshotScriptDir: "/usr/local/share/mediainfo/scripts",
 	}
 }
 
@@ -148,27 +148,33 @@ func (e *scriptEngine) generateTimestamps(ctx context.Context, sourcePath string
 	return buildRandomSecondsFloat(duration, count), nil
 }
 
-func (e *scriptEngine) listScreenshotFiles(dir string) ([]string, error) {
+func (e *scriptEngine) listScreenshotFiles(dir string) ([]ScreenshotFileInfo, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
 
-	files := make([]string, 0, len(entries))
+	files := make([]ScreenshotFileInfo, 0, len(entries))
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
 		}
 		switch strings.ToLower(filepath.Ext(entry.Name())) {
 		case ".png", ".jpg", ".jpeg", ".gif", ".webp":
-			files = append(files, filepath.Join(dir, entry.Name()))
+			fullPath := filepath.Join(dir, entry.Name())
+			info, _ := entry.Info()
+			files = append(files, ScreenshotFileInfo{
+				Path: fullPath,
+				Name: entry.Name(),
+				Size: info.Size(),
+			})
 		}
 	}
 	if len(files) == 0 {
 		return nil, fmt.Errorf("no screenshots were generated")
 	}
 
-	sort.Strings(files)
+	sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
 	return files, nil
 }
 

@@ -123,7 +123,7 @@ export function useMediaActions(path, screenshotVariant, screenshotCount, screen
         try {
             activateOutputPanel();
             setBusy(true, "正在生成截图...", "download-shots");
-            const { downloadURL, logs } = await prepareScreenshotZipDownload(
+            const { downloadURL, logs, files } = await prepareScreenshotZipDownload(
                 path.value.trim(),
                 screenshotVariant.value,
                 screenshotSubtitleMode.value,
@@ -131,7 +131,13 @@ export function useMediaActions(path, screenshotVariant, screenshotCount, screen
             );
             logScreenshotLogs("download", logs);
             startPreparedDownload(downloadURL);
-            setOutputText("截图已生成。");
+            
+            const fileInfo = files.map(f => ({
+                name: f.name,
+                size: formatFileSize(f.size)
+            }));
+            const fileListText = fileInfo.map(f => `${f.name} (${f.size})`).join("\n");
+            setOutputText(`截图已生成。\n\n文件列表：\n${fileListText}`);
         } catch (err) {
             logScreenshotLogs("download failed", err?.logs, true);
             clearOutputState();
@@ -140,6 +146,14 @@ export function useMediaActions(path, screenshotVariant, screenshotCount, screen
         } finally {
             setBusy(false);
         }
+    };
+
+    const formatFileSize = (bytes) => {
+        if (bytes === 0) return "0 B";
+        const k = 1024;
+        const sizes = ["B", "KB", "MB", "GB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
     };
 
     const outputShotLinks = async () => {

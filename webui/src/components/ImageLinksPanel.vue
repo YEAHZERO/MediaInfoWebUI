@@ -38,6 +38,8 @@
                             />
                         </a>
                         <div class="output-link-details">
+                            <div class="output-link-filename">{{ item.name || item.url.split('/').pop() }}</div>
+                            <div v-if="item.size" class="output-link-size">{{ item.size }}</div>
                             <a class="output-link-anchor" :href="item.url" target="_blank" rel="noreferrer noopener">
                                 {{ item.url }}
                             </a>

@@ -1,4 +1,4 @@
-const STORAGE_KEY = "minfo:webui:state:v1";
+const STORAGE_KEY = "mediainfo:webui:state:v1";
 const DEFAULT_STATE = {
     path: "",
     browserDir: "",

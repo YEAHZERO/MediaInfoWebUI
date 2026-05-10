@@ -30,6 +30,7 @@ export async function prepareScreenshotZipDownload(path, variant, subtitleMode, 
     return {
         downloadURL: new URL(data.output, window.location.origin).toString(),
         logs: typeof data.logs === "string" ? data.logs : "",
+        files: Array.isArray(data.files) ? data.files : [],
     };
 }
 

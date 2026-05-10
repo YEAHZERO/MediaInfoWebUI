@@ -72,8 +72,14 @@ type CaptureOptions struct {
 	OnProgress   ProgressCallback
 }
 
+type ScreenshotFileInfo struct {
+	Path string `json:"path"`
+	Size int64  `json:"size"`
+	Name string `json:"name"`
+}
+
 type CaptureResult struct {
-	Files       []string
+	Files       []ScreenshotFileInfo
 	Logs        string
 	ColorSpace  *ColorSpaceInfo
 	Compression *CompressionResult

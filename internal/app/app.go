@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"minfo/internal/config"
-	"minfo/internal/httpapi"
-	"minfo/internal/media"
+	"mediainfo/internal/config"
+	"mediainfo/internal/httpapi"
+	"mediainfo/internal/media"
 )
 
 func NewServer(staticFS fs.FS) (*http.Server, error) {

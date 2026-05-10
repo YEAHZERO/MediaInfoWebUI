@@ -11,7 +11,7 @@ if [[ -f .env ]]; then
     set +a
 fi
 
-PORT="${PORT:-28080}"
+PORT="${PORT:-28888}"
 WEBUI_PORT="${WEBUI_PORT:-28081}"
 VITE_API_TARGET="${VITE_API_TARGET:-http://127.0.0.1:${PORT}}"
 

@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"minfo/internal/config"
-	"minfo/internal/httpapi/transport"
-	"minfo/internal/screenshot"
+	"mediainfo/internal/config"
+	"mediainfo/internal/httpapi/transport"
+	"mediainfo/internal/screenshot"
 )
 
 func ScreenshotsHandler(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +52,7 @@ func handleScreenshotsPost(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), config.RequestTimeout)
 	defer cancel()
 
-	tempDir, err := os.MkdirTemp("", "minfo-shots-*")
+	tempDir, err := os.MkdirTemp("", "mediainfo-shots-*")
 	if err != nil {
 		transport.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -70,12 +70,17 @@ func handleScreenshotsPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if shouldPrepareDownload(r) {
-		downloadURL, logs, err := prepareScreenshotZipDownload(ctx, path, tempDir, variant, subtitleMode, count)
+		downloadURL, logs, files, err := prepareScreenshotZipDownload(ctx, path, tempDir, variant, subtitleMode, count)
 		if err != nil {
 			transport.WriteJSON(w, http.StatusInternalServerError, transport.InfoResponse{OK: false, Error: err.Error(), Logs: logs})
 			return
 		}
-		transport.WriteJSON(w, http.StatusOK, transport.InfoResponse{OK: true, Output: downloadURL, Logs: logs})
+		transport.WriteJSON(w, http.StatusOK, transport.ScreenshotResponse{
+			OK:      true,
+			Output:  downloadURL,
+			Logs:    logs,
+			Files:   files,
+		})
 		return
 	}
 
@@ -103,7 +108,7 @@ func handleScreenshotZipDownload(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), config.RequestTimeout)
 	defer cancel()
 
-	tempDir, err := os.MkdirTemp("", "minfo-shots-*")
+	tempDir, err := os.MkdirTemp("", "mediainfo-shots-*")
 	if err != nil {
 		transport.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -119,17 +124,17 @@ func shouldPrepareDownload(r *http.Request) bool {
 	return strings.TrimSpace(r.FormValue("prepare_download")) == "1"
 }
 
-func prepareScreenshotZipDownload(ctx context.Context, path, tempDir, variant, subtitleMode string, count int) (string, string, error) {
-	zipBytes, logs, err := generateScreenshotZip(ctx, path, tempDir, variant, subtitleMode, count)
+func prepareScreenshotZipDownload(ctx context.Context, path, tempDir, variant, subtitleMode string, count int) (string, string, []screenshot.ScreenshotFileInfo, error) {
+	zipBytes, logs, files, err := generateScreenshotZip(ctx, path, tempDir, variant, subtitleMode, count)
 	if err != nil {
-		return "", logs, err
+		return "", logs, nil, err
 	}
 
 	token, err := screenshot.SavePreparedDownload(zipBytes)
 	if err != nil {
-		return "", logs, err
+		return "", logs, nil, err
 	}
-	return "/api/screenshots?token=" + token, logs, nil
+	return "/api/screenshots?token=" + token, logs, files, nil
 }
 
 func writeScreenshotZipResponse(ctx context.Context, w http.ResponseWriter, path, tempDir, variant, subtitleMode string, count int) error {
@@ -147,17 +152,17 @@ func writeScreenshotZipResponse(ctx context.Context, w http.ResponseWriter, path
 	return nil
 }
 
-func generateScreenshotZip(ctx context.Context, path, tempDir, variant, subtitleMode string, count int) ([]byte, string, error) {
+func generateScreenshotZip(ctx context.Context, path, tempDir, variant, subtitleMode string, count int) ([]byte, string, []screenshot.ScreenshotFileInfo, error) {
 	result, err := screenshot.RunScriptWithLogs(ctx, path, tempDir, variant, subtitleMode, count)
 	if err != nil {
-		return nil, result.Logs, err
+		return nil, result.Logs, nil, err
 	}
 
 	zipBytes, err := screenshot.ZipFiles(result.Files)
 	if err != nil {
-		return nil, result.Logs, err
+		return nil, result.Logs, nil, err
 	}
-	return zipBytes, result.Logs, nil
+	return zipBytes, result.Logs, result.Files, nil
 }
 
 func servePreparedScreenshotDownload(w http.ResponseWriter, r *http.Request, token string) {

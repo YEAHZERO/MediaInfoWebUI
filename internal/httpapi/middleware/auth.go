@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"minfo/internal/config"
-	"minfo/internal/httpapi/transport"
+	"mediainfo/internal/config"
+	"mediainfo/internal/httpapi/transport"
 )
 
 func Logging(next http.Handler) http.Handler {

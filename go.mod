@@ -1,4 +1,4 @@
-module minfo
+module mediainfo
 
 go 1.22
 
