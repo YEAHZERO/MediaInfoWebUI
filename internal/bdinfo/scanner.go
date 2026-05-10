@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"mediainfo/internal/media"
+	"mediainfo/internal/system"
 )
 
 type Scanner struct {
@@ -80,32 +81,26 @@ func (s *Scanner) runJob(job *Job) {
 
 	args := buildBDInfoArgs(job, bdPath, jobDir)
 
-	cmd := exec.CommandContext(ctx, s.jm.BinPath(), args...)
-	var stdout, stderr strings.Builder
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	stdout, stderr, err := system.RunCommandLive(ctx, s.jm.BinPath(), func(stream, line string) {
+		s.parseProgressLine(line, job)
+	}, args...)
 
-	if err := cmd.Start(); err != nil {
+	if err != nil {
 		job.Status = JobStatusError
-		job.Error = fmt.Sprintf("failed to start bdinfo: %v", err)
-		job.EndTime = time.Now()
-		s.jm.UpdateJob(job)
-		return
-	}
-
-	if err := cmd.Wait(); err != nil {
-		job.Status = JobStatusError
-		job.Error = fmt.Sprintf("bdinfo failed: %v", err)
+		job.Error = fmt.Sprintf("bdinfo failed: %v", system.BestErrorMessage(err, stderr, stdout))
 		job.EndTime = time.Now()
 		s.jm.UpdateJob(job)
 		return
 	}
 
 	reportPath := filepath.Join(jobDir, "report.txt")
-	reportContent := stdout.String() + stderr.String()
+	reportContent := stdout + stderr
 	if err := os.WriteFile(reportPath, []byte(reportContent), 0644); err == nil {
 		job.ReportPath = reportPath
-		job.Summary = s.extractSummary(reportContent)
+		job.Summary = SelectLargestPlaylistBlock(reportContent)
+		if job.Summary == "" {
+			job.Summary = s.extractSummary(reportContent)
+		}
 	}
 
 	job.Status = JobStatusDone
@@ -216,6 +211,88 @@ func (s *Scanner) extractSummary(report string) string {
 	}
 
 	return summary.String()
+}
+
+func (s *Scanner) parseProgressLine(line string, job *Job) {
+	progressRe := regexp.MustCompile(`(?i)(\d+(?:\.\d+)?)\s*%`)
+	etaRe := regexp.MustCompile(`(?i)ETA[:\s]+(\d+):(\d+):(\d+)`)
+
+	if matches := progressRe.FindStringSubmatch(line); matches != nil {
+		if progress, err := strconv.ParseFloat(matches[1], 64); err == nil {
+			job.Progress = progress
+			s.jm.UpdateJob(job)
+		}
+	}
+
+	if matches := etaRe.FindStringSubmatch(line); matches != nil {
+		hours, _ := strconv.Atoi(matches[1])
+		mins, _ := strconv.Atoi(matches[2])
+		secs, _ := strconv.Atoi(matches[3])
+		job.ETASec = hours*3600 + mins*60 + secs
+		s.jm.UpdateJob(job)
+	}
+}
+
+func SelectLargestPlaylistBlock(report string) string {
+	lines := strings.Split(report, "\n")
+	if len(lines) == 0 {
+		return ""
+	}
+
+	type playlistBlock struct {
+		start int
+		end   int
+		size  int
+	}
+
+	var blocks []playlistBlock
+	var currentStart = -1
+	playlistRe := regexp.MustCompile(`(?i)Playlist\s+\d+`)
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+
+		if playlistRe.MatchString(trimmed) {
+			if currentStart >= 0 {
+				blocks = append(blocks, playlistBlock{
+					start: currentStart,
+					end:   i - 1,
+					size:  i - currentStart,
+				})
+			}
+			currentStart = i
+		}
+	}
+
+	if currentStart >= 0 {
+		blocks = append(blocks, playlistBlock{
+			start: currentStart,
+			end:   len(lines) - 1,
+			size:  len(lines) - currentStart,
+		})
+	}
+
+	if len(blocks) == 0 {
+		return ""
+	}
+
+	largest := blocks[0]
+	for _, block := range blocks[1:] {
+		if block.size > largest.size {
+			largest = block
+		}
+	}
+
+	var result strings.Builder
+	for i := largest.start; i <= largest.end && i < len(lines); i++ {
+		result.WriteString(lines[i])
+		result.WriteString("\n")
+	}
+
+	return result.String()
 }
 
 func (s *Scanner) Stop() {

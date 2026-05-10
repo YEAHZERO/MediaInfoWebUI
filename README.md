@@ -3,7 +3,7 @@
 > 基于 [minfo](https://github.com/mirrorb/minfo) 改进的本地媒体信息检测 Web 工具
 
 [![Docker Pulls](https://img.shields.io/badge/Docker-GHCR-blue)](https://github.com/YEAHZERO/MediaInfoWebUI/pkgs/container/mediainfowebui)
-[![Version](https://img.shields.io/badge/version-1.4.2-green)](https://github.com/YEAHZERO/MediaInfoWebUI/releases/tag/v1.4.2)
+[![Version](https://img.shields.io/badge/version-1.4.3-green)](https://github.com/YEAHZERO/MediaInfoWebUI/releases/tag/v1.4.3)
 
 ## 目录
 
@@ -217,10 +217,30 @@ git clone https://github.com/YEAHZERO/MediaInfoWebUI.git
 cd MediaInfoWebUI
 ```
 
-**标准构建（默认 ScriptEngine）**
+**多阶段构建（根据需求选择）**
 
 ```bash
-docker build --network=host -t mediainfowebui:latest .
+# 轻量版（无 mkvtoolnix）
+docker build --network=host --target runtime-light -t mediainfowebui:light .
+
+# 标准版（含旧版 mkvtoolnix，兼容旧环境）
+docker build --network=host --target runtime-standard -t mediainfowebui:latest .
+
+# 全功能版（含新版 mkvtoolnix + Native 引擎）
+docker build --network=host --target runtime-native -t mediainfowebui:native .
+```
+
+**使用 docker-compose 构建**
+
+```bash
+# 构建标准版（默认）
+BUILD_TARGET=runtime-standard docker compose build
+
+# 构建轻量版
+BUILD_TARGET=runtime-light docker compose build
+
+# 构建全功能版
+BUILD_TARGET=runtime-native docker compose build
 ```
 
 **全量构建（含 NativeEngine + WebSocket，需要特殊镜像）**
@@ -657,7 +677,48 @@ export REQUEST_TIMEOUT=30m
 
 ## 更新日志
 
-### \[1.4.2] - 2026-05-10
+### [1.4.3] - 2026-05-11
+
+**新增 - 6 大核心功能升级**
+
+**RunCommandLive 实时进度回调**
+- 新增 `RunCommandLive` 函数，支持实时处理命令输出
+- 新增 `OutputLineHandler` 回调类型，按行处理输出
+- BDInfo 扫描现在支持实时进度推送
+
+**虚拟 ISO 路径支持**
+- 新增 `ResolveInputPath` 函数，支持 `ISO:/path!/inner` 格式
+- 新增 `isVirtualISOPath` 和 `parseVirtualISOPath` 解析
+- 完整支持 ISO 挂载和内部路径访问
+
+**更全面的 DVD 解析**
+- 新增 `resolveDVDMediaInfoFileFromRoot` 从根目录选择文件
+- 新增 `findMainDVDTitleSetFirstVOB` 选择主标题集
+- 新增 `dvdControlIFOPathFromTitleVOB` 等路径推导
+- 完整支持 VOB/IFO 处理
+
+**PGS 字幕逐个探测 + 可见性检测**
+- 实现完整的字幕索引扫描管道
+- 新增 `probePGSSubtitleSpans` 和 `probeDVDSubtitleSpans`
+- 可见性检测支持自动回溯和验证
+
+**字幕对齐校准**
+- 新增 `alignToSubtitle` 函数，对齐到最近字幕
+- 新增 `resolveUniqueScreenshotSecond` 避免时间重复
+- 完整支持 PGS/DVD 字幕可见性验证
+
+**SelectLargestPlaylistBlock 完整报告提取**
+- 自动识别 BDInfo 报告中的 Playlist 块
+- 选择体积最大的 Playlist 块作为主内容
+- 更新 BDInfo 扫描器使用此功能
+
+**优化**
+- Dockerfile 参考 minfo 结构重构，增加 BDInfo 构建
+- 新增 C 工具 `bdsub` 构建阶段
+- 多阶段构建优化，减小最终镜像体积
+- 使用 Alpine edge 仓库获取最新依赖
+
+### [1.4.2] - 2026-05-10
 
 **修复 - 字幕流索引问题**
 

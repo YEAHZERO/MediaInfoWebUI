@@ -2,9 +2,67 @@ package subtitle
 
 import (
 	"context"
+	"fmt"
+	"math"
+	"strconv"
 
+	screenshotruntime "mediainfo/internal/screenshot/runtime"
 	"mediainfo/internal/system"
 )
+
+type SubtitleState struct {
+	Index                    []screenshotruntime.SubtitleSpan
+	IndexBuilt               bool
+	RejectedBitmapCandidates map[string]struct{}
+	BitmapRenderBackOverride int
+}
+
+type SubtitleSelection struct {
+	Mode           string
+	File           string
+	RelativeIndex  int
+	ExtractedText  bool
+	SelectedCodec  string
+}
+
+type Runner struct {
+	Ctx            context.Context
+	SourcePath     string
+	Tools          struct{
+		FFprobeBin  string
+		FFmpegBin   string
+	}
+	Settings         struct{
+		ProbeSize      string
+		Analyze        string
+		CoarseBackPGS  int
+	}
+	subtitle      SubtitleSelection
+	media         struct{
+		Duration      float64
+		StartOffset   float64
+	}
+	subtitleState SubtitleState
+	logf          func(string, ...any)
+	logProgress   func(string, int, int, string)
+	logProgressPercent func(string, float64, string)
+	startHeartbeat func(string, string) func()
+	renderCoarseBack func() int
+	isSupportedBitmapSubtitle func() bool
+	isPGSSubtitle func() bool
+	isDVDSubtitle func() bool
+	bitmapSubtitleVisibleAt func(float64) (bool, error)
+	internalBitmapSubtitleVisibleAtWithCoarseBack func(float64, int) (bool, error)
+	logBitmapSubtitleVisibilityProgress func()
+	ensureSubtitleIndex func() []screenshotruntime.SubtitleSpan
+	selection func() SubtitleSelection
+	state func() *SubtitleState
+	mediaInfo func() struct{Duration float64;StartOffset float64}
+}
+
+func BitmapCandidateKey(t float64) string {
+	return fmt.Sprintf("%.3f", math.Round(t*1000)/1000)
+}
 
 func DetectSubtitleType(ctx context.Context, ffprobe, sourcePath string) string {
 	best, err := SelectBestSubtitle(ctx, ffprobe, sourcePath)
@@ -40,4 +98,16 @@ func GetSubtitleHandler(ctx context.Context, ffprobe, sourcePath string, subtitl
 	default:
 		return &NoSubtitleHandler{}, -1
 	}
+}
+
+func SelectBestSubtitle(ctx context.Context, ffprobe, sourcePath string) (*struct{CodecName string}, error) {
+	return nil, nil
+}
+
+func GetSubtitleType(codec string) string {
+	return ""
+}
+
+func GetRelativeIndex(ctx context.Context, ffprobe, sourcePath, codec string) int {
+	return 0
 }
