@@ -63,7 +63,7 @@ func (e *scriptEngine) Capture(ctx context.Context, opts CaptureOptions) (*Captu
 		args := append([]string{scriptPath}, subtitleArgs...)
 		args = append(args, sourcePath, opts.OutputDir, ts)
 
-		stdout, stderr, err := system.RunCommand(ctx, "bash", args...)
+		stdout, stderr, err := system.RunCommand(ctx, "/bin/bash", args...)
 		logs.WriteString(system.CombineCommandOutput(stdout, stderr))
 		if err != nil {
 			hb.doneMsg(fmt.Sprintf("screenshot %d/%d failed", i+1, opts.Count))
