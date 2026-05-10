@@ -1,6 +1,9 @@
 package media
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 type byPathType map[PathType]PathResolver
 
@@ -128,9 +131,9 @@ func (r *dirISOResolver) ResolveMediaInfo(ctx ResolveContext, _ int) ([]string, 
 type dirVideoResolver struct{}
 
 func (r *dirVideoResolver) ResolveScreenshot(ctx ResolveContext) (string, func(), error) {
-	videoPath, err := findVideoFile(ctx.Input)
-	if err != nil {
-		return "", func() {}, err
+	videoPath := findVideoFile(ctx.Input)
+	if videoPath == "" {
+		return "", func() {}, fmt.Errorf("no video file found in %s", ctx.Input)
 	}
 	return videoPath, func() {}, nil
 }

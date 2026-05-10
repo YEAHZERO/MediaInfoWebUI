@@ -322,84 +322,33 @@ func (e *nativeEngine) captureBitmapSubtitle(ctx context.Context, ffmpeg, ffprob
 	}
 	defer os.RemoveAll(overlayDir)
 
-	overlayMKV := filepath.Join(overlayDir, "overlay.mkv")
-
-	extractArgs := []string{
-		"-y",
-		"-v", "error",
-		"-fflags", "+genpts",
-		"-ss", coarseHMS,
-		"-i", source,
-		"-ss", fmt.Sprintf("%.3f", fineSecond),
-		"-map", "0:s:0",
-		"-frames:s", "1",
-		"-c:s", "copy",
-		overlayMKV,
-	}
-
-	if _, stderr, err := system.RunCommand(ctx, ffmpeg, extractArgs...); err != nil {
-		return fmt.Errorf("subtitle extraction: %s", system.BestErrorMessage(err, stderr, ""))
-	}
-
-	if _, err := os.Stat(overlayMKV); err != nil {
-		return e.captureFrame(ctx, ffmpeg, source, output, coarseHMS, fineSecond, &noSubtitleHandler{}, format, -1, nil)
-	}
-
-	pngOverlay := filepath.Join(overlayDir, "overlay.png")
-	convertArgs := []string{
-		"-y",
-		"-v", "error",
-		"-i", overlayMKV,
-		"-vframes", "1",
-		"-compression_level", "3",
-		pngOverlay,
-	}
-	if _, _, err := system.RunCommand(ctx, ffmpeg, convertArgs...); err != nil {
-		return e.captureFrame(ctx, ffmpeg, source, output, coarseHMS, fineSecond, &noSubtitleHandler{}, format, -1, nil)
-	}
-
 	baseFrame := filepath.Join(overlayDir, "base.png")
 	if err := e.captureFrame(ctx, ffmpeg, source, baseFrame, coarseHMS, fineSecond, &noSubtitleHandler{}, format, -1, nil); err != nil {
 		return err
 	}
 
-	compositeArgs := e.buildCompositeArgs(ffmpeg, ffprobe, baseFrame, pngOverlay, output, format)
-	_, stderr, err := system.RunCommand(ctx, ffmpeg, compositeArgs...)
+	args := e.buildBitmapOverlayArgs(ffmpeg, ffprobe, source, baseFrame, coarseHMS, fineSecond, output, format)
+	_, stderr, err := system.RunCommand(ctx, ffmpeg, args...)
 	if err != nil {
-		return fmt.Errorf("overlay composite: %s", system.BestErrorMessage(err, stderr, ""))
+		return fmt.Errorf("bitmap subtitle overlay: %s", system.BestErrorMessage(err, stderr, ""))
 	}
 	return nil
 }
 
-func (e *nativeEngine) buildCompositeArgs(ffmpeg, ffprobe, baseFrame, pngOverlay, output string, format OutputFormat) []string {
+func (e *nativeEngine) buildBitmapOverlayArgs(ffmpeg, ffprobe, source, baseFrame, coarseHMS string, fineSecond float64, output string, format OutputFormat) []string {
 	vw, vh := probeVideoDimensions(ffprobe, baseFrame)
-	ow, oh := probeVideoDimensions(ffprobe, pngOverlay)
-
-	var filterComplex string
-	if vw > 0 && vh > 0 && ow > 0 && oh > 0 {
-		if ow == vw && oh <= vh {
-			yOff := vh - oh - 10
-			if yOff < 0 {
-				yOff = 0
-			}
-			filterComplex = fmt.Sprintf("[0:v][1:v]overlay=0:%d", yOff)
-		} else {
-			filterComplex = fmt.Sprintf("[1:v]scale=%d:-2[sub];[0:v][sub]overlay=(W-w)/2:(H-h-10)", vw)
-		}
-	} else {
-		filterComplex = "[0:v][1:v]overlay=(W-w)/2:(H-h-10)"
+	filterComplex := fmt.Sprintf("[1:v]format=yuva420p[sub];[0:v][sub]overlay=0:%d", vh-10)
+	if vw > 0 && vh > 0 {
+		filterComplex = fmt.Sprintf("[1:v]scale=%d:-2[sub];[0:v][sub]overlay=0:%d", vw, vh-10)
 	}
 
-	args := []string{
-		"-y",
-		"-v", "error",
-		"-i", baseFrame,
-		"-i", pngOverlay,
+	return []string{
+		"-y", "-v", "error",
+		"-ss", coarseHMS, "-i", source,
+		"-ss", fmt.Sprintf("%.3f", fineSecond), "-i", baseFrame,
 		"-filter_complex", filterComplex,
+		"-map", "0:s:0?",
 	}
-	args = append(args, format.CodecArgs()...)
-	args = append(args, output)
-	return args
 }
 
 func (e *nativeEngine) captureLog(err error, current, total int) string {
