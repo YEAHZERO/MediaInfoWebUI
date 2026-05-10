@@ -10,9 +10,10 @@
 - [项目介绍](#项目介绍)
 - [功能特性](#功能特性)
 - [快速开始](#快速开始)
-  - [使用已发布镜像](#使用已发布镜像)
-  - [docker-compose 部署（推荐）](#docker-compose-部署推荐)
-  - [本地构建](#本地构建)
+  - [方式一：一行命令部署](#方式一一行命令部署快速尝鲜)
+  - [方式二：docker-compose 部署](#方式二docker-compose-部署推荐)
+  - [方式三：本地构建](#方式三本地构建)
+  - [配置参考](#配置参考)
 - [API 文档](#api-文档)
 - [技术架构](#技术架构)
 - [常见问题](#常见问题)
@@ -112,36 +113,29 @@
 
 - Docker 20.10+
 - 支持 x86\_64 / ARM64 架构
-- 宿主机需加载 `loop` 模块（用于挂载 ISO/BMDV）
+- 宿主机需加载 `loop` 模块（用于挂载 ISO/BDMV）
 
-### 使用已发布镜像
-
-🎉 **镜像已推送到 GitHub Container Registry！**
-
-| 镜像     | 地址                                       | 压缩后大小   |
-| :----- | :--------------------------------------- | :------ |
-| latest | `ghcr.io/yeahzero/mediainfowebui:latest` | \~115MB |
+### 方式一：一行命令部署（快速尝鲜）
 
 ```bash
-# 拉取镜像
-docker pull ghcr.io/yeahzero/mediainfowebui:latest
-
-# 快速运行，使用不同容器名
 docker run -d \
-   --network host \
-   -v /lib/modules:/lib/modules:ro \
-   -v /path/to/your/media:/media:ro \
-   -e TZ=Asia/Shanghai \
-   -e PORT=28080 \
-   -e REQUEST_TIMEOUT=20m \
-   --name minfo-v1.1.3 \
-   --restart unless-stopped \
-   ghcr.io/yeahzero/mediainfowebui:v1.1.3
+  --name minfo \
+  --privileged \
+  -p 28080:28080 \
+  -e TZ=Asia/Shanghai \
+  -e WEB_USERNAME=admin \
+  -e WEB_PASSWORD=your_secure_password \
+  -e PORT=28080 \
+  -e REQUEST_TIMEOUT=30m \
+  -v /lib/modules:/lib/modules:ro \
+  -v /path/to/your/media:/media:ro \
+  --restart unless-stopped \
+  ghcr.io/yeahzero/mediainfowebui:latest
 ```
 
-### docker-compose 部署（推荐）
+### 方式二：docker-compose 部署（推荐）
 
-**1. 创建 docker-compose.yml（端口映射模式）**
+**1. 创建 docker-compose.yml**
 
 ```yaml
 services:
@@ -152,68 +146,27 @@ services:
     ports:
       - "28080:28080"
     environment:
+      TZ: "Asia/Shanghai"
+      WEB_USERNAME: "admin"
+      WEB_PASSWORD: "your_secure_password"
       PORT: "28080"
-      REQUEST_TIMEOUT: "20m"
-      # 截图引擎配置（可选）
-      # ENABLE_NATIVE_ENGINE: "0"
+      REQUEST_TIMEOUT: "30m"
+      # 截图引擎（可选，详见配置参考）
+      # ENABLE_NATIVE_ENGINE: "1"
       # SCREENSHOT_COMPRESS_THRESHOLD: "10485760"
       # SCREENSHOT_COMPRESS_STRATEGY: "auto"
     volumes:
       - /lib/modules:/lib/modules:ro
-      - /path/to/your/media1:/media_path1:ro
-      - /path/to/your/media2:/media_path2:ro
+      - /path/to/your/media:/media:ro
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:28080/api/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 ```
 
-**1. 创建 docker-compose.yml（Host 网络模式）**
-
-```yaml
-services:
-  minfo:
-    image: ghcr.io/yeahzero/mediainfowebui:latest
-    container_name: minfo
-    privileged: true
-    network_mode: host
-    environment:
-      PORT: "28080"
-      REQUEST_TIMEOUT: "20m"
-      # 截图引擎配置（可选）
-      # ENABLE_NATIVE_ENGINE: "0"
-      # SCREENSHOT_COMPRESS_THRESHOLD: "10485760"
-      # SCREENSHOT_COMPRESS_STRATEGY: "auto"
-    volumes:
-      - /lib/modules:/lib/modules:ro
-      - /qbittorrent/downloads:/media:ro
-    restart: unless-stopped
-```
-
-**2. 创建 .env 文件（可选）**
-
-```bash
-# 认证配置
-WEB_USERNAME=admin
-WEB_PASSWORD=your_secure_password
-
-# 服务端口
-PORT=28080
-
-# 超时设置
-REQUEST_TIMEOUT=20m
-
-# 截图引擎配置（可选）
-# ENABLE_NATIVE_ENGINE=0        # 启用 Go 原生截图引擎（需要 CGO，默认关闭）
-# SCREENSHOT_COMPRESS_THRESHOLD=10485760  # 截图压缩阈值（字节，默认 10MB）
-# SCREENSHOT_COMPRESS_STRATEGY=auto       # 压缩策略：lossless/lossy/auto
-# OXIPNG_BIN=oxipng             # oxipng 无损压缩工具路径
-# PNGQUANT_BIN=pngquant         # pngquant 有损压缩工具路径
-
-# 代理配置（可选）
-HTTP_PROXY=http://proxy.example.com:8080
-HTTPS_PROXY=http://proxy.example.com:8080
-NO_PROXY=localhost,127.0.0.1
-```
-
-**3. 启动服务**
+**2. 启动服务**
 
 ```bash
 docker compose up -d
@@ -225,133 +178,40 @@ docker compose logs -f
 docker compose down
 ```
 
-**4. 访问服务**
-
-打开浏览器访问 `http://你的服务器IP:28080`
-
-### 本地构建
+### 方式三：本地构建
 
 ```bash
-# 克隆项目
 git clone https://github.com/YEAHZERO/MediaInfoWebUI.git
 cd MediaInfoWebUI
 
-# 构建镜像（使用 host 网络解决网络问题）
+# 构建镜像
 docker build --network=host -t mediainfowebui:latest .
 
-# 运行测试
-docker run -d --name minfo-test --privileged -p 28080:28080 \
+# 运行
+docker run -d --name minfo --privileged -p 28080:28080 \
   -v /lib/modules:/lib/modules:ro \
-  -v $(pwd)/test-media:/media_path1:ro \
+  -v $(pwd)/test-media:/media:ro \
   mediainfowebui:latest
-
-# 查看容器状态
-docker ps | grep minfo-test
 ```
 
-**使用 Makefile（可选）**
+### 访问服务
 
-```makefile
-# Makefile 内容
-.PHONY: docker-build docker-run docker-push docker-clean
+打开浏览器访问 `http://你的服务器IP:28080`
 
-VERSION ?= latest
+### 配置参考
 
-docker-build:
-	docker build --network=host -t mediainfowebui:$(VERSION) .
-
-docker-run:
-	docker rm -f minfo-test 2>/dev/null || true
-	docker run -d --name minfo-test --privileged -p 28080:28080 \
-		-v /lib/modules:/lib/modules:ro \
-		-v $(PWD)/test-media:/media_path1:ro \
-		mediainfowebui:$(VERSION)
-
-docker-push:
-	docker tag mediainfowebui:$(VERSION) ghcr.io/yeahzero/mediainfowebui:$(VERSION)
-	docker push ghcr.io/yeahzero/mediainfowebui:$(VERSION)
-
-docker-clean:
-	docker rm -f minfo-test 2>/dev/null || true
-	docker rmi mediainfowebui:$(VERSION) 2>/dev/null || true
-```
-
-```bash
-make docker-build
-make docker-run
-```
-
-### 🚀 更新方法
-
-**使用 Docker 命令更新（端口映射模式）**
-
-```bash
-# 停止并删除旧容器
-docker stop minfo 2>/dev/null || true && docker rm minfo 2>/dev/null || true
-
-# 拉取最新镜像
-docker pull ghcr.io/yeahzero/mediainfowebui:latest
-
-# 启动新容器
-docker run -d \
-   -p 28080:28080 \
-   -v /lib/modules:/lib/modules:ro \
-   -v /path/to/your/media:/media:ro \
-   -e TZ=Asia/Shanghai \
-   -e PORT=28080 \
-   -e REQUEST_TIMEOUT=20m \
-   --name minfo \
-   --restart unless-stopped \
-   ghcr.io/yeahzero/mediainfowebui:latest
-```
-
-**使用 Docker 命令更新（Host 网络模式）**
-
-```bash
-# 删除可能存在的同名容器
-docker rm -f minfo
-
-# 清理网络残留
-docker network prune -f
-
-# 拉取最新镜像
-docker pull ghcr.io/yeahzero/mediainfowebui:latest
-
-# 使用 host 网络模式（绕过问题）
-docker run -d \
-   --network host \
-   -v /lib/modules:/lib/modules:ro \
-   -v /path/to/your/media:/media:ro \
-   -e TZ=Asia/Shanghai \
-   -e PORT=28080 \
-   -e REQUEST_TIMEOUT=20m \
-   --name minfo \
-   --restart unless-stopped \
-   ghcr.io/yeahzero/mediainfowebui:latest
-```
-
-**使用 docker-compose 更新**
-
-```bash
-# 拉取最新镜像
-docker-compose pull
-
-# 重新启动容器
-docker-compose up -d
-
-# 查看日志
-docker-compose logs -f
-```
-
-**检查更新状态**
-
-```bash
-# 查看容器版本
-docker inspect minfo | grep -A 5 "Image"
-
-# 查看容器状态
-docker ps | grep minfo
-```
+| 环境变量 | 默认值 | 说明 |
+|---------|--------|------|
+| `WEB_USERNAME` | `admin` | 管理界面用户名 |
+| `WEB_PASSWORD` | `admin` | 管理界面密码 |
+| `PORT` | `28080` | 服务端口 |
+| `TZ` | `UTC` | 时区 |
+| `REQUEST_TIMEOUT` | `20m` | 请求超时（大文件建议 `30m`） |
+| `ENABLE_NATIVE_ENGINE` | `0` | 启用 Go 原生截图引擎（需特殊镜像） |
+| `SCREENSHOT_COMPRESS_THRESHOLD` | `10485760` | 截图压缩阈值（字节） |
+| `SCREENSHOT_COMPRESS_STRATEGY` | `auto` | 压缩策略：`lossless`/`lossy`/`auto` |
+| `OXIPNG_BIN` | `oxipng` | oxipng 路径 |
+| `PNGQUANT_BIN` | `pngquant` | pngquant 路径 |
 
 ***
 
@@ -545,18 +405,6 @@ docker inspect minfo | grep Privileged
 ```bash
 docker build --network=host -t mediainfowebui:latest .
 ```
-
-### Q: 如何更新到最新镜像？
-
-**A**: 使用以下命令更新：
-
-```bash
-docker pull ghcr.io/yeahzero/mediainfowebui:latest
-docker compose down
-docker compose up -d
-```
-
-> **有 Go 开发环境？** 参考下方的 [服务器更新指南](#服务器更新指南) 从源码构建。
 
 ### Q: Web 界面显示"读取路径失败"？
 
