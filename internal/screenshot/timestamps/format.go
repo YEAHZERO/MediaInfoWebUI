@@ -1,0 +1,14 @@
+package timestamps
+
+import "fmt"
+
+func FormatTimestamp(seconds float64) string {
+	h := int(seconds / 3600)
+	m := int((seconds - float64(h)*3600) / 60)
+	s := seconds - float64(h)*3600 - float64(m)*60
+	return fmt.Sprintf("%02d:%02d:%06.3f", h, m, s)
+}
+
+func FormatSeconds(seconds float64) string {
+	return fmt.Sprintf("%.3f", seconds)
+}
