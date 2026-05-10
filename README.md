@@ -183,15 +183,51 @@ docker compose down
 ```bash
 git clone https://github.com/YEAHZERO/MediaInfoWebUI.git
 cd MediaInfoWebUI
+```
 
-# 构建镜像
+**标准构建（默认 ScriptEngine）**
+
+```bash
 docker build --network=host -t mediainfowebui:latest .
+```
 
-# 运行
-docker run -d --name minfo --privileged -p 28080:28080 \
+**全量构建（含 NativeEngine + WebSocket，需要特殊镜像）**
+
+需要先从源码编译带 `-tags native` 的二进制，然后打包进镜像：
+
+```bash
+# 1. 编译带 native 支持的二进制（需要 CGO 环境）
+CGO_ENABLED=1 go build -tags native -o minfo ./cmd/minfo
+
+# 2. 打包进 Docker 镜像
+docker build --network=host -t mediainfowebui:native .
+```
+
+> **网络问题**：如果 Docker 构建报 `failed to create endpoint ... on network bridge: operation not supported`，务必加 `--network=host`。
+
+**运行**
+
+```bash
+# 标准镜像
+docker run -d --name minfo --privileged --network host \
+  -e TZ=UTC -e WEB_USERNAME=admin -e WEB_PASSWORD=your_password \
+  -e PORT=28080 -e REQUEST_TIMEOUT=30m \
   -v /lib/modules:/lib/modules:ro \
-  -v $(pwd)/test-media:/media:ro \
+  -v /home/live/qbittorrent/downloads:/media:ro \
+  --restart unless-stopped \
   mediainfowebui:latest
+
+# 全量镜像（native）
+docker run -d --name minfo --privileged --network host \
+  -e TZ=UTC -e WEB_USERNAME=admin -e WEB_PASSWORD=your_password \
+  -e PORT=28080 -e REQUEST_TIMEOUT=30m \
+  -e ENABLE_NATIVE_ENGINE=1 \
+  -e SCREENSHOT_COMPRESS_THRESHOLD=10485760 \
+  -e SCREENSHOT_COMPRESS_STRATEGY=auto \
+  -v /lib/modules:/lib/modules:ro \
+  -v /home/live/qbittorrent/downloads:/media:ro \
+  --restart unless-stopped \
+  mediainfowebui:native
 ```
 
 ### 访问服务
@@ -506,7 +542,8 @@ export WEB_PASSWORD=your_password
 - CGO 绑定的 libplacebo 色彩空间转换管道
 - 支持 HDR10、HDR10+、Dolby Vision Profile 5/7/8
 - vulkan 后端，高质量 HDR→SDR tone mapping
-- 编译：`go build -tags native ./cmd/minfo`
+- 编译：`CGO_ENABLED=1 go build -tags native -o minfo ./cmd/minfo`
+- Docker 镜像：`docker build --network=host -t mediainfowebui:native .`
 
 **优化**
 

@@ -271,8 +271,10 @@ build_text_sub_filter() {
         escaped=$(echo "$sub_path" | sed "s/:/\\\\:/g; s/'/'\\\\\\\\''/g")
         filter+="'$escaped'"
     else
-        # Internal subtitle
-        filter+="'$INPUT_FILE'"
+        # Internal subtitle: escape : and ' the same way
+        local escaped
+        escaped=$(echo "$INPUT_FILE" | sed "s/:/\\\\:/g; s/'/'\\\\\\\\''/g")
+        filter+="'$escaped'"
     fi
 
     if [[ -n "$stream_idx" ]]; then
