@@ -34,17 +34,16 @@ RUN BUILD_TIME=${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)} && \
     GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -buildvcs=false -ldflags="-s -w -X mediainfo/internal/httpapi/handlers.BuildTime=${BUILD_TIME} -X mediainfo/internal/httpapi/handlers.BuildVersion=${BUILD_VERSION} -X mediainfo/internal/httpapi/handlers.BuildCommit=${BUILD_COMMIT}" -o /out/mediainfo ./cmd/mediainfo
 
 # ============================================
-# Stage: 最终镜像（使用 Ubuntu 作为基础，支持新版 mkvtoolnix）
+# Stage: 最终镜像（使用 Ubuntu 24.04 作为基础，支持新版 mkvtoolnix）
 # ============================================
 FROM ubuntu:24.04 AS runtime
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y --fix-missing --no-install-recommends \
     mediainfo \
     mkvtoolnix \
     ffmpeg \
-    ffprobe \
     p7zip-full \
-    libudf0 \
+    udftools \
     && rm -rf /var/lib/apt/lists/*
 
 COPY scripts/seedbox/ /usr/local/share/mediainfo/scripts/
