@@ -500,7 +500,7 @@ docker build --network=host -t mediainfowebui:native .
 # 启动容器
 docker rm -f mediainfo 2>/dev/null
 docker run -d --name mediainfo --privileged --network host \
-  -e TZ=UTC -e PORT=28888 -e REQUEST_TIMEOUT=30m \
+  -e TZ=Asia/Shanghai -e PORT=28888 -e REQUEST_TIMEOUT=30m \
   -e ENABLE_NATIVE_ENGINE=1 -e MEDIAINFO_BIN=/usr/bin/mediainfo \
   -v /lib/modules:/lib/modules:ro \
   -v /home/live/qbittorrent/downloads:/media:ro \
@@ -514,7 +514,7 @@ docker run -d --name mediainfo --privileged --network host \
 # 启动容器（直接使用 GHCR 镜像）
 docker rm -f mediainfo 2>/dev/null
 docker run -d --name mediainfo --privileged --network host \
-  -e TZ=UTC -e PORT=28888 -e REQUEST_TIMEOUT=30m \
+  -e TZ=Asia/Shanghai -e PORT=28888 -e REQUEST_TIMEOUT=30m \
   -e ENABLE_NATIVE_ENGINE=1 -e MEDIAINFO_BIN=/usr/bin/mediainfo \
   -v /lib/modules:/lib/modules:ro \
   -v /home/live/qbittorrent/downloads:/media:ro \
