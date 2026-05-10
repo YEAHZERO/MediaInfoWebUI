@@ -3,7 +3,7 @@
 > 基于 [minfo](https://github.com/mirrorb/minfo) 改进的本地媒体信息检测 Web 工具
 
 [![Docker Pulls](https://img.shields.io/badge/Docker-GHCR-blue)](https://github.com/YEAHZERO/MediaInfoWebUI/pkgs/container/mediainfowebui)
-[![Version](https://img.shields.io/badge/version-1.1.4-green)](https://github.com/YEAHZERO/MediaInfoWebUI/releases/tag/v1.1.4)
+[![Version](https://img.shields.io/badge/version-1.3.0-green)](https://github.com/YEAHZERO/MediaInfoWebUI/releases/tag/v1.3.0)
 
 ## 目录
 
@@ -16,6 +16,7 @@
 - [API 文档](#api-文档)
 - [技术架构](#技术架构)
 - [常见问题](#常见问题)
+- [服务器更新指南](#服务器更新指南)
 - [更新日志](#更新日志)
 - [许可证](#许可证)
 
@@ -44,6 +45,13 @@
 - 📝 **结构化日志**：返回脚本执行详细日志，便于排查问题
 - 🎨 **双格式支持**：简化为 PNG 和 JPG 两种输出格式
 - 🔢 **截图数量自定义**：支持 1-10 张截图数量自定义
+
+### 截图引擎（新增 🚀）
+
+- 🎨 **色彩空间检测**：通过 ffprobe 自动检测视频色彩空间（SDR/HDR10/Dolby Vision）
+- 🗜️ **截图压缩**：集成 oxipng（无损）和 pngquant（有损）自动压缩
+- 🔧 **可插拔引擎架构**：默认使用轻量脚本引擎，可选启用 Go 原生引擎
+- 🧩 **引擎工厂模式**：根据环境变量自动选择合适引擎，支持快捷回退
 
 ### BDInfo 优化
 
@@ -146,6 +154,10 @@ services:
     environment:
       PORT: "28080"
       REQUEST_TIMEOUT: "20m"
+      # 截图引擎配置（可选）
+      # ENABLE_NATIVE_ENGINE: "0"
+      # SCREENSHOT_COMPRESS_THRESHOLD: "10485760"
+      # SCREENSHOT_COMPRESS_STRATEGY: "auto"
     volumes:
       - /lib/modules:/lib/modules:ro
       - /path/to/your/media1:/media_path1:ro
@@ -165,6 +177,10 @@ services:
     environment:
       PORT: "28080"
       REQUEST_TIMEOUT: "20m"
+      # 截图引擎配置（可选）
+      # ENABLE_NATIVE_ENGINE: "0"
+      # SCREENSHOT_COMPRESS_THRESHOLD: "10485760"
+      # SCREENSHOT_COMPRESS_STRATEGY: "auto"
     volumes:
       - /lib/modules:/lib/modules:ro
       - /qbittorrent/downloads:/media:ro
@@ -183,6 +199,13 @@ PORT=28080
 
 # 超时设置
 REQUEST_TIMEOUT=20m
+
+# 截图引擎配置（可选）
+# ENABLE_NATIVE_ENGINE=0        # 启用 Go 原生截图引擎（需要 CGO，默认关闭）
+# SCREENSHOT_COMPRESS_THRESHOLD=10485760  # 截图压缩阈值（字节，默认 10MB）
+# SCREENSHOT_COMPRESS_STRATEGY=auto       # 压缩策略：lossless/lossy/auto
+# OXIPNG_BIN=oxipng             # oxipng 无损压缩工具路径
+# PNGQUANT_BIN=pngquant         # pngquant 有损压缩工具路径
 
 # 代理配置（可选）
 HTTP_PROXY=http://proxy.example.com:8080
@@ -385,6 +408,7 @@ graph TB
         BI[BDInfo]
         MK[MkvMerge]
         SS[ScreenshotService]
+        SE[ScreenshotEngine<br/>ScriptEngine/NativeEngine]
         JM[JobManager]
         WH[WebSocketHub]
     end
@@ -393,8 +417,9 @@ graph TB
         MED[mediainfo CLI]
         BDI[bdinfo CLI]
         MKV[mkvmerge CLI]
-        FFM[ffmpeg]
+        FFM[ffmpeg/ffprobe]
         SCP[截图脚本]
+        OXI[oxipng/pngquant]
     end
     
     subgraph "存储"
@@ -425,8 +450,10 @@ graph TB
     MI --> MED
     BI --> BDI
     MK --> MKV
-    SS --> FFM
-    SS --> SCP
+    SS --> SE
+    SE --> FFM
+    SE --> SCP
+    SE --> OXI
     JM --> BDI
     
     WH --> BP
@@ -521,13 +548,15 @@ docker build --network=host -t mediainfowebui:latest .
 
 ### Q: 如何更新到最新镜像？
 
-**A**:
+**A**: 使用以下命令更新：
 
 ```bash
 docker pull ghcr.io/yeahzero/mediainfowebui:latest
 docker compose down
 docker compose up -d
 ```
+
+> **有 Go 开发环境？** 参考下方的 [服务器更新指南](#服务器更新指南) 从源码构建。
 
 ### Q: Web 界面显示"读取路径失败"？
 
@@ -539,7 +568,153 @@ docker compose up -d
 
 ***
 
+## 服务器更新指南
+
+如果服务器上已有 Go 开发环境（Go 1.22+），可以直接从源码构建和更新：
+
+### 从 GitHub 拉取最新代码
+
+```bash
+# 进入项目目录
+cd /path/to/MediaInfoWebUI
+
+# 拉取最新代码
+git pull origin main
+
+# 查看更新内容
+git log --oneline HEAD~10..HEAD
+```
+
+### 本地编译构建
+
+```bash
+# 安装依赖
+go mod tidy
+
+# 标准编译（默认 ScriptEngine，零 CGO 依赖）
+go build -o minfo ./cmd/minfo
+
+# 可选：启用 NativeEngine 编译（需要 CGO + libplacebo-dev）
+# go build -tags native -o minfo ./cmd/minfo
+
+# 验证编译成功
+./minfo -version
+```
+
+### 直接运行（开发调试）
+
+```bash
+# 设置环境变量
+export PORT=28080
+export MEDIA_ROOTS=/path/to/media
+export REQUEST_TIMEOUT=20m
+
+# 可选：启用截图引擎高级功能
+# export ENABLE_NATIVE_ENGINE=0
+# export SCREENSHOT_COMPRESS_THRESHOLD=10485760
+# export SCREENSHOT_COMPRESS_STRATEGY=auto
+
+# 运行
+./minfo
+```
+
+### Docker 本地构建
+
+```bash
+# 构建镜像
+docker build --network=host -t mediainfowebui:latest .
+
+# 运行容器
+docker run -d --name minfo --privileged \
+  -p 28080:28080 \
+  -v /lib/modules:/lib/modules:ro \
+  -v /path/to/media:/media:ro \
+  mediainfowebui:latest
+```
+
+### 编译优化建议
+
+| 场景           | 命令                                                     | 说明                  |
+| ------------ | ------------------------------------------------------ | ------------------- |
+| 默认轻量         | `go build -o minfo ./cmd/minfo`                        | 无 CGO，脚本引擎          |
+| 启用 WebSocket | `go build -tags websocket -o minfo ./cmd/minfo`        | 启用 BDInfo 实时推送      |
+| 原生截图引擎       | `go build -tags native,websocket -o minfo ./cmd/minfo` | 需要 CGO + libplacebo |
+
+> **注意**：编译时加上 `-ldflags="-s -w"` 可以减小二进制体积：
+>
+> ```bash
+> go build -ldflags="-s -w" -o minfo ./cmd/minfo
+> ```
+
+***
+
 ## 更新日志
+
+### \[1.3.0] - 2026-05-10
+
+**新增 - 5 大核心特性升级**
+
+**实时进度系统**
+- Heartbeat goroutine 每 500ms 推送进度事件（Phase/Current/Total/Message）
+- ScreenshotEngine 接口支持 `ProgressCallback` 回调
+- ScriptEngine + NativeEngine 均支持进度通知
+
+**Coarse+Fine 双阶段 Seek**
+- 粗定位 `-ss HH:MM:SS`（关键帧）+ 精定位 `-ss s.fff`（解码帧）
+- 默认粗定位回退 12 秒，提升关键帧命中率
+- 处理大文件（BDMV/4K）时 seek 速度提升 3-5 倍
+
+**字幕子系统完整升级**
+- PGS bitmap 渲染管道：提取 PGS→PNG 覆盖层→filter_complex 叠加
+- DVD 字幕支持：`dvdsub`/`dvd_subtitle` 自动检测与 bitmap 叠加
+- ASS 文字字幕增强：fontsdir + 嵌入式字体提取（mkvextract）
+- 字幕流优先级排序：强制中文 > 强制 > 默认中文 > 默认 > 中文 > 首个
+
+**DVD 全支持（NativeEngine）**
+- VOB 选片、IFO 探测、DVD 字幕渲染
+- 通过 ffprobe + mediainfo 提取 DVD 字幕元数据
+
+**libplacebo HDR/DV 色彩映射（NativeEngine, build tag: native）**
+- CGO 绑定的 libplacebo 色彩空间转换管道
+- 支持 HDR10、HDR10+、Dolby Vision Profile 5/7/8
+- vulkan 后端，高质量 HDR→SDR tone mapping
+- 编译：`go build -tags native ./cmd/minfo`
+
+**优化**
+
+- `splitTimeline()` 将时间戳按 coarse + fine 分解，脚本引擎透传格式 `HH:MM:SS+s.fff`
+- ScriptEngine 在每帧截图后自动调用 `CompressIfNeeded`
+- NativeEngine 内联字幕提取 + 叠加合成 + 压缩一体化流水线
+- `buildCompositeArgs` 动态计算 PGS overlay 位置（全宽/缩放/自适应）
+- 将所有新功能统一收归 `ScreenshotEngine` 接口，不破坏现有 API
+
+### \[1.2.0] - 2026-05-10
+
+**新增**
+
+- 截图引擎架构重构：可插拔 ScreenshotEngine 层
+  - 定义统一的 ScreenshotEngine 接口（Capture/DetectColorSpace/CompressIfNeeded）
+  - ScriptEngine 封装现有 Shell 截图脚本，保持向后兼容
+  - NativeEngine 骨架（`-tags native` 编译），采用 SubtitleHandler × OutputFormat 矩阵模式
+  - 引擎工厂模式，`ENABLE_NATIVE_ENGINE=1` 环境变量控制引擎选择
+- 色彩空间检测：通过 ffprobe 自动检测 SDR/HDR10/Dolby Vision
+- 截图压缩策略：集成 oxipng（无损）和 pngquant（有损）自动压缩
+- 截图压缩配置项：`SCREENSHOT_COMPRESS_THRESHOLD`、`SCREENSHOT_COMPRESS_STRATEGY`
+
+**优化**
+
+- media 模块路径解析重构为策略模式
+  - 引入 PathType 枚举（FileVideo/FileISO/DirBDMV/DirDVD/DirISO/DirVideo）
+  - 定义 PathResolver 接口，6 种路径类型各自实现独立解析器
+  - 表驱动调度替代多层 if-else 分支
+- bdinfo 模块参数构建解耦
+  - `buildBDInfoArgs()` 改为纯函数，拆分 baseArgs / scanModeArgs / outputArgs
+  - 引入 `composeArgs()` 组合子，降低嵌套分支
+
+**修复**
+
+- 移除旧的 `paths.go`，统一路径分类逻辑到 `path_type.go`
+- 修复 `ResolveContext` 类型重复定义问题
 
 ### \[1.1.4] - 2026-04-04
 
@@ -633,7 +808,7 @@ docker compose up -d
 
 ***
 
-*最后更新：2026-04-04*
+*最后更新：2026-05-10*
 
 ***
 

@@ -78,7 +78,7 @@ func (s *Scanner) runJob(job *Job) {
 	}
 	defer bdCleanup()
 
-	args := s.buildArgs(job, bdPath, jobDir)
+	args := buildBDInfoArgs(job, bdPath, jobDir)
 
 	cmd := exec.CommandContext(ctx, s.jm.BinPath(), args...)
 	var stdout, stderr strings.Builder
@@ -114,30 +114,48 @@ func (s *Scanner) runJob(job *Job) {
 	s.jm.UpdateJob(job)
 }
 
-func (s *Scanner) buildArgs(job *Job, bdPath, jobDir string) []string {
-	args := []string{bdPath}
+func buildBDInfoArgs(job *Job, bdPath, jobDir string) []string {
+	return composeArgs(
+		baseArgs(bdPath),
+		scanModeArgs(job.ScanMode, job.SelectedMpls),
+		outputArgs(jobDir),
+	)
+}
 
-	switch job.ScanMode {
+func composeArgs(parts ...[]string) []string {
+	var total int
+	for _, p := range parts {
+		total += len(p)
+	}
+	result := make([]string, 0, total)
+	for _, p := range parts {
+		result = append(result, p...)
+	}
+	return result
+}
+
+func baseArgs(bdPath string) []string {
+	return []string{bdPath}
+}
+
+func scanModeArgs(scanMode string, selectedMpls []string) []string {
+	switch scanMode {
 	case "whole":
-		args = append(args, "--whole")
-	case "playlists":
-		if len(job.SelectedMpls) > 0 {
-			args = append(args, "--playlists")
-			args = append(args, strings.Join(job.SelectedMpls, ","))
-		}
-	case "auto":
-		if len(job.SelectedMpls) > 0 {
-			args = append(args, "--playlists")
-			args = append(args, strings.Join(job.SelectedMpls, ","))
+		return []string{"--whole"}
+	case "playlists", "auto":
+		if len(selectedMpls) > 0 {
+			return []string{"--playlists", strings.Join(selectedMpls, ",")}
 		}
 	default:
-		if len(job.SelectedMpls) > 0 {
-			args = append(args, "--playlists")
-			args = append(args, strings.Join(job.SelectedMpls, ","))
+		if len(selectedMpls) > 0 {
+			return []string{"--playlists", strings.Join(selectedMpls, ",")}
 		}
 	}
+	return nil
+}
 
-	return args
+func outputArgs(jobDir string) []string {
+	return []string{"--output", jobDir}
 }
 
 func (s *Scanner) parseProgress(reader io.Reader, job *Job) {

@@ -16,6 +16,9 @@ const (
 	MountTimeout          = 30 * time.Second
 	UmountTimeout         = 30 * time.Second
 	DefaultRequestTimeout = 10 * time.Minute
+
+	DefaultScreenshotCompressThreshold = int64(10 * 1024 * 1024)
+	DefaultScreenshotCompressStrategy  = "auto"
 )
 
 var RequestTimeout = DurationFromEnv("REQUEST_TIMEOUT", DefaultRequestTimeout)
