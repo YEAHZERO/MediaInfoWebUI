@@ -3,7 +3,7 @@
 > 基于 [minfo](https://github.com/mirrorb/minfo) 改进的本地媒体信息检测 Web 工具
 
 [![Docker Pulls](https://img.shields.io/badge/Docker-GHCR-blue)](https://github.com/YEAHZERO/MediaInfoWebUI/pkgs/container/mediainfowebui)
-[![Version](https://img.shields.io/badge/version-1.4.0-green)](https://github.com/YEAHZERO/MediaInfoWebUI/releases/tag/v1.3.0)
+[![Version](https://img.shields.io/badge/version-1.4.2-green)](https://github.com/YEAHZERO/MediaInfoWebUI/releases/tag/v1.4.2)
 
 ## 目录
 
@@ -485,6 +485,8 @@ go build -o mediainfo ./cmd/mediainfo
 
 ### Docker 全量部署（推荐）
 
+#### 方式一：本地构建
+
 ```bash
 # 进入项目目录
 cd /path/to/MediaInfoWebUI
@@ -504,6 +506,20 @@ docker run -d --name mediainfo --privileged --network host \
   -v /home/live/qbittorrent/downloads:/media:ro \
   --restart unless-stopped \
   mediainfowebui:native
+```
+
+#### 方式二：使用远程镜像
+
+```bash
+# 启动容器（直接使用 GHCR 镜像）
+docker rm -f mediainfo 2>/dev/null
+docker run -d --name mediainfo --privileged --network host \
+  -e TZ=UTC -e PORT=28888 -e REQUEST_TIMEOUT=30m \
+  -e ENABLE_NATIVE_ENGINE=1 -e MEDIAINFO_BIN=/usr/bin/mediainfo \
+  -v /lib/modules:/lib/modules:ro \
+  -v /home/live/qbittorrent/downloads:/media:ro \
+  --restart unless-stopped \
+  ghcr.io/yeahzero/mediainfowebui:latest
 ```
 
 ### 直接运行（开发调试）
