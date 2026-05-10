@@ -51,7 +51,7 @@ ARG BUILD_TIME
 ARG BUILD_VERSION
 ARG BUILD_COMMIT
 
-RUN apk add --no-cache gcc musl-dev libplacebo-dev && \
+RUN apk add --no-cache gcc musl-dev && \
     BUILD_TIME=${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)} && \
     BUILD_VERSION=${BUILD_VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo "dev")} && \
     BUILD_COMMIT=${BUILD_COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")} && \
@@ -107,18 +107,19 @@ ENV ENGINE_TYPE=script
 ENTRYPOINT ["/usr/local/bin/mediainfo"]
 
 # ============================================
-# Stage: Native 版镜像（含新版 mkvtoolnix，Native 引擎）
+# Stage: Native 版镜像（使用 Debian 支持新版 mkvtoolnix 和 libplacebo）
 # ============================================
-FROM alpine:3.20 AS runtime-native
+FROM debian:bookworm-slim AS runtime-native
 
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     mediainfo \
+    mkvtoolnix \
     ffmpeg \
     p7zip-full \
     udftools \
     kmod \
-    mkvtoolnix \
-    libplacebo
+    libplacebo208 \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY scripts/seedbox/ /usr/local/share/mediainfo/scripts/
 RUN chmod +x /usr/local/share/mediainfo/scripts/*.sh
