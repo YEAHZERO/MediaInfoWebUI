@@ -362,9 +362,15 @@ do_screenshot() {
         ffmpeg_args+=(-vf "$vf")
     fi
 
+    if needs_tonemap; then
+        ffmpeg_args+=(-pix_fmt yuv420p10le)
+    else
+        ffmpeg_args+=(-pix_fmt yuv420p)
+    fi
+
     ffmpeg_args+=(
         -compression_level 6
-        -pred mixed -pix_fmt yuv420p10le
+        -pred mixed
         "$output"
     )
 
@@ -377,7 +383,7 @@ do_screenshot() {
             ffmpeg -y -ss "$timestamp" -i "$INPUT_FILE" \
                 -vframes 1 -an \
                 -vf "$fallback_vf" \
-                -compression_level 6 -pred mixed -pix_fmt yuv420p10le \
+                -compression_level 6 -pred mixed -pix_fmt yuv420p \
                 "$output" 2>/dev/null || {
                 echo "  [fallback] retrying with basic settings..."
                 ffmpeg -y -ss "$timestamp" -i "$INPUT_FILE" \
@@ -431,20 +437,20 @@ composite_pgs() {
             local y_offset=$((vh - oh - 10))
             ffmpeg -y -i "$screenshot" -i "$overlay" \
                 -filter_complex "[0:v][1:v]overlay=0:$y_offset" \
-                -compression_level 6 -pred mixed \
+                -pix_fmt yuv420p -compression_level 6 -pred mixed \
                 "$screenshot.tmp.png" 2>/dev/null && mv "$screenshot.tmp.png" "$screenshot"
         else
             # Scaled overlay
             ffmpeg -y -i "$screenshot" -i "$overlay" \
                 -filter_complex "[1:v]scale=$vw:-2[sub];[0:v][sub]overlay=(W-w)/2:(H-h-10)" \
-                -compression_level 6 -pred mixed \
+                -pix_fmt yuv420p -compression_level 6 -pred mixed \
                 "$screenshot.tmp.png" 2>/dev/null && mv "$screenshot.tmp.png" "$screenshot"
         fi
     else
         # Fallback: simple bottom-center overlay
         ffmpeg -y -i "$screenshot" -i "$overlay" \
             -filter_complex "[0:v][1:v]overlay=(W-w)/2:(H-h-10)" \
-            -compression_level 6 -pred mixed \
+            -pix_fmt yuv420p -compression_level 6 -pred mixed \
             "$screenshot.tmp.png" 2>/dev/null && mv "$screenshot.tmp.png" "$screenshot"
     fi
 }
