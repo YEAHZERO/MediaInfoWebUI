@@ -452,32 +452,12 @@ go build -o minfo ./cmd/minfo
 ### 直接运行（开发调试）
 
 ```bash
-# 设置环境变量
 export PORT=28080
 export MEDIA_ROOTS=/path/to/media
-export REQUEST_TIMEOUT=20m
-
-# 可选：启用截图引擎高级功能
-# export ENABLE_NATIVE_ENGINE=0
-# export SCREENSHOT_COMPRESS_THRESHOLD=10485760
-# export SCREENSHOT_COMPRESS_STRATEGY=auto
-
-# 运行
+export REQUEST_TIMEOUT=30m
+export WEB_USERNAME=admin
+export WEB_PASSWORD=your_password
 ./minfo
-```
-
-### Docker 本地构建
-
-```bash
-# 构建镜像
-docker build --network=host -t mediainfowebui:latest .
-
-# 运行容器
-docker run -d --name minfo --privileged \
-  -p 28080:28080 \
-  -v /lib/modules:/lib/modules:ro \
-  -v /path/to/media:/media:ro \
-  mediainfowebui:latest
 ```
 
 ### 编译优化建议
