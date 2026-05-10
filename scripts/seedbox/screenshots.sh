@@ -151,10 +151,11 @@ detect_internal_subtitles() {
         return 1
     fi
 
-    local best_idx=""
+    local best_global_idx=""
     local best_priority=-1
-    local fallback_idx=""
+    local fallback_global_idx=""
     local fallback_priority=-1
+    local sub_counter=0
 
     while IFS= read -r line; do
         [[ -z "$line" ]] && continue
@@ -201,18 +202,21 @@ detect_internal_subtitles() {
         else priority=0
         fi
 
+        # Store the relative subtitle index (sub_counter) instead of global index
         if [[ "$priority" -gt "$best_priority" ]]; then
             fallback_priority="$best_priority"
-            fallback_idx="$best_idx"
+            fallback_global_idx="$best_global_idx"
             best_priority="$priority"
-            best_idx="$idx"
+            best_global_idx="$sub_counter"
         elif [[ "$priority" -gt "$fallback_priority" ]]; then
             fallback_priority="$priority"
-            fallback_idx="$idx"
+            fallback_global_idx="$sub_counter"
         fi
+
+        sub_counter=$((sub_counter + 1))
     done <<< "$streams"
 
-    echo "$best_idx"
+    echo "$best_global_idx"
 }
 
 detect_pgs_subtitles() {

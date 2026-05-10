@@ -510,6 +510,22 @@ export REQUEST_TIMEOUT=30m
 
 ## 更新日志
 
+### \[1.4.2] - 2026-05-10
+
+**修复 - 字幕流索引问题**
+
+- 根因：`detect_internal_subtitles` 函数返回全局流索引，而 ffmpeg 的 subtitles 滤镜需要字幕流的相对索引
+- 修复：改为返回字幕流的相对索引（从 0 开始），确保 ffmpeg 能正确找到字幕流
+
+**修复 - MediaInfo CLI 工具路径问题**
+
+- 根因：容器内 `/usr/local/bin/mediainfo` 是 Go 应用，而不是 MediaInfo CLI 工具
+- 修复：在 Dockerfile 中设置 `ENV MEDIAINFO_BIN=/usr/bin/mediainfo`
+
+**修复 - 日志显示问题**
+
+- 修复：日志显示从 `localhost` 改为 `0.0.0.0`，更准确反映实际绑定地址
+
 ### \[1.4.0] - 2026-05-10
 
 **修复 - 字幕截图体积优化**

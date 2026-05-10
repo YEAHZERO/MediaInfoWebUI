@@ -48,4 +48,5 @@ RUN chmod +x /usr/local/bin/mediainfo
 
 WORKDIR /app
 ENV PORT=28888
+ENV MEDIAINFO_BIN=/usr/bin/mediainfo
 ENTRYPOINT ["/usr/local/bin/mediainfo"]
