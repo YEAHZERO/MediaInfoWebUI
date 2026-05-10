@@ -123,12 +123,10 @@ docker run -d \
   --privileged \
   -p 28080:28080 \
   -e TZ=Asia/Shanghai \
-  -e WEB_USERNAME=admin \
-  -e WEB_PASSWORD=your_secure_password \
   -e PORT=28080 \
   -e REQUEST_TIMEOUT=30m \
   -v /lib/modules:/lib/modules:ro \
-  -v /path/to/your/media:/media:ro \
+  -v //home/live/qbittorrent/downloads:/media:ro \
   --restart unless-stopped \
   ghcr.io/yeahzero/mediainfowebui:latest
 ```
@@ -147,8 +145,6 @@ services:
       - "28080:28080"
     environment:
       TZ: "Asia/Shanghai"
-      WEB_USERNAME: "admin"
-      WEB_PASSWORD: "your_secure_password"
       PORT: "28080"
       REQUEST_TIMEOUT: "30m"
       # 截图引擎（可选，详见配置参考）
@@ -157,7 +153,7 @@ services:
       # SCREENSHOT_COMPRESS_STRATEGY: "auto"
     volumes:
       - /lib/modules:/lib/modules:ro
-      - /path/to/your/media:/media:ro
+      - //home/live/qbittorrent/downloads:/media:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:28080/api/version"]
@@ -205,22 +201,25 @@ docker build --network=host -t mediainfowebui:native .
 
 > **网络问题**：如果 Docker 构建报 `failed to create endpoint ... on network bridge: operation not supported`，务必加 `--network=host`。
 
-**运行**
+**运行**（默认无认证，如需认证参考上方配置参考）
 
 ```bash
 # 标准镜像
 docker run -d --name minfo --privileged --network host \
-  -e TZ=UTC -e WEB_USERNAME=admin -e WEB_PASSWORD=your_password \
-  -e PORT=28080 -e REQUEST_TIMEOUT=30m \
+  -e TZ=UTC -e PORT=28080 -e REQUEST_TIMEOUT=30m \
   -v /lib/modules:/lib/modules:ro \
   -v /home/live/qbittorrent/downloads:/media:ro \
   --restart unless-stopped \
   mediainfowebui:latest
 
 # 全量镜像（native）
-docker run -d --name minfo --privileged --network host \
-  -e TZ=UTC -e WEB_USERNAME=admin -e WEB_PASSWORD=your_password \
-  -e PORT=28080 -e REQUEST_TIMEOUT=30m \
+docker rm -f minfo 2>/dev/null; docker run -d \
+  --name minfo \
+  --privileged \
+  --network host \
+  -e TZ=UTC \
+  -e PORT=28080 \
+  -e REQUEST_TIMEOUT=30m \
   -e ENABLE_NATIVE_ENGINE=1 \
   -e SCREENSHOT_COMPRESS_THRESHOLD=10485760 \
   -e SCREENSHOT_COMPRESS_STRATEGY=auto \
@@ -236,18 +235,16 @@ docker run -d --name minfo --privileged --network host \
 
 ### 配置参考
 
-| 环境变量 | 默认值 | 说明 |
-|---------|--------|------|
-| `WEB_USERNAME` | `admin` | 管理界面用户名 |
-| `WEB_PASSWORD` | `admin` | 管理界面密码 |
-| `PORT` | `28080` | 服务端口 |
-| `TZ` | `UTC` | 时区 |
-| `REQUEST_TIMEOUT` | `20m` | 请求超时（大文件建议 `30m`） |
-| `ENABLE_NATIVE_ENGINE` | `0` | 启用 Go 原生截图引擎（需特殊镜像） |
-| `SCREENSHOT_COMPRESS_THRESHOLD` | `10485760` | 截图压缩阈值（字节） |
-| `SCREENSHOT_COMPRESS_STRATEGY` | `auto` | 压缩策略：`lossless`/`lossy`/`auto` |
-| `OXIPNG_BIN` | `oxipng` | oxipng 路径 |
-| `PNGQUANT_BIN` | `pngquant` | pngquant 路径 |
+| 环境变量                            | 默认值        | 说明                             |
+| ------------------------------- | ---------- | ------------------------------ |
+| `PORT`                          | `28080`    | 服务端口                           |
+| `TZ`                            | `UTC`      | 时区                             |
+| `REQUEST_TIMEOUT`               | `20m`      | 请求超时（大文件建议 `30m`）              |
+| `ENABLE_NATIVE_ENGINE`          | `0`        | 启用 Go 原生截图引擎（需特殊镜像）            |
+| `SCREENSHOT_COMPRESS_THRESHOLD` | `10485760` | 截图压缩阈值（字节）                     |
+| `SCREENSHOT_COMPRESS_STRATEGY`  | `auto`     | 压缩策略：`lossless`/`lossy`/`auto` |
+| `OXIPNG_BIN`                    | `oxipng`   | oxipng 路径                      |
+| `PNGQUANT_BIN`                  | `pngquant` | pngquant 路径                    |
 
 ***
 
@@ -491,8 +488,6 @@ go build -o minfo ./cmd/minfo
 export PORT=28080
 export MEDIA_ROOTS=/path/to/media
 export REQUEST_TIMEOUT=30m
-export WEB_USERNAME=admin
-export WEB_PASSWORD=your_password
 ./minfo
 ```
 
@@ -519,26 +514,31 @@ export WEB_PASSWORD=your_password
 **新增 - 5 大核心特性升级**
 
 **实时进度系统**
+
 - Heartbeat goroutine 每 500ms 推送进度事件（Phase/Current/Total/Message）
 - ScreenshotEngine 接口支持 `ProgressCallback` 回调
 - ScriptEngine + NativeEngine 均支持进度通知
 
 **Coarse+Fine 双阶段 Seek**
+
 - 粗定位 `-ss HH:MM:SS`（关键帧）+ 精定位 `-ss s.fff`（解码帧）
 - 默认粗定位回退 12 秒，提升关键帧命中率
 - 处理大文件（BDMV/4K）时 seek 速度提升 3-5 倍
 
 **字幕子系统完整升级**
-- PGS bitmap 渲染管道：提取 PGS→PNG 覆盖层→filter_complex 叠加
+
+- PGS bitmap 渲染管道：提取 PGS→PNG 覆盖层→filter\_complex 叠加
 - DVD 字幕支持：`dvdsub`/`dvd_subtitle` 自动检测与 bitmap 叠加
 - ASS 文字字幕增强：fontsdir + 嵌入式字体提取（mkvextract）
 - 字幕流优先级排序：强制中文 > 强制 > 默认中文 > 默认 > 中文 > 首个
 
 **DVD 全支持（NativeEngine）**
+
 - VOB 选片、IFO 探测、DVD 字幕渲染
 - 通过 ffprobe + mediainfo 提取 DVD 字幕元数据
 
 **libplacebo HDR/DV 色彩映射（NativeEngine, build tag: native）**
+
 - CGO 绑定的 libplacebo 色彩空间转换管道
 - 支持 HDR10、HDR10+、Dolby Vision Profile 5/7/8
 - vulkan 后端，高质量 HDR→SDR tone mapping
@@ -586,7 +586,7 @@ export WEB_PASSWORD=your_password
 **变更**
 
 - 移除所有硬编码的本地路径信息
-- 统一使用通用路径示例 `/path/to/your/media`
+- 统一使用通用路径示例 `//home/live/qbittorrent/downloads`
 - 优化文档中的路径配置示例
 
 ### \[1.1.3] - 2026-04-04
