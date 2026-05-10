@@ -47,8 +47,7 @@ func (e *scriptEngine) Capture(ctx context.Context, opts CaptureOptions) (*Captu
 	}
 	timestamps := make([]string, 0, len(seconds))
 	for _, s := range seconds {
-		coarse, fine := splitTimeline(float64(s), CoarseBackDefault)
-		timestamps = append(timestamps, fmt.Sprintf("%s+%.3f", formatTimestamp(coarse), fine))
+		timestamps = append(timestamps, fmt.Sprintf("%.3f", s))
 	}
 
 	if err := os.MkdirAll(opts.OutputDir, 0755); err != nil {
