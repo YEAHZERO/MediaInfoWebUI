@@ -5,8 +5,13 @@ import (
 	"bytes"
 	"io"
 	"os"
-	"path/filepath"
 )
+
+type ScreenshotFileInfo struct {
+	Path string
+	Name string
+	Size int64
+}
 
 func ZipFiles(files []ScreenshotFileInfo) ([]byte, error) {
 	var buf bytes.Buffer
@@ -50,10 +55,4 @@ func ZipFiles(files []ScreenshotFileInfo) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
-}
-
-type ScreenshotFileInfo struct {
-	Path string
-	Name string
-	Size int64
 }

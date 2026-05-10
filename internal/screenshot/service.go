@@ -24,7 +24,7 @@ const (
 )
 
 type ScriptResult struct {
-	Files []engine.ScreenshotFileInfo
+	Files []ScreenshotFileInfo
 	Logs  string
 }
 
@@ -56,7 +56,7 @@ func NormalizeCount(raw string) int {
 	return engine.NormalizeCount(raw)
 }
 
-func RunScript(ctx context.Context, inputPath, outputDir, variant, subtitleMode string, count int) ([]string, error) {
+func RunScript(ctx context.Context, inputPath, outputDir, variant, subtitleMode string, count int) ([]ScreenshotFileInfo, error) {
 	result, err := RunScriptWithLogs(ctx, inputPath, outputDir, variant, subtitleMode, count)
 	if err != nil {
 		return nil, err
@@ -74,11 +74,23 @@ func RunScriptWithLogs(ctx context.Context, inputPath, outputDir, variant, subti
 	})
 	if err != nil {
 		if capResult != nil {
-			return ScriptResult{Files: capResult.Files, Logs: capResult.Logs}, err
+			files := make([]ScreenshotFileInfo, 0, len(capResult.Files))
+			for _, f := range capResult.Files {
+				files = append(files, ScreenshotFileInfo{Path: f.Path, Name: f.Name, Size: f.Size})
+			}
+			return ScriptResult{Files: files, Logs: capResult.Logs}, err
 		}
 		return ScriptResult{}, err
 	}
-	return ScriptResult{Files: capResult.Files, Logs: capResult.Logs}, nil
+	files := make([]ScreenshotFileInfo, 0, len(capResult.Files))
+	for _, f := range capResult.Files {
+		files = append(files, ScreenshotFileInfo{
+			Path: f.Path,
+			Name: f.Name,
+			Size: f.Size,
+		})
+	}
+	return ScriptResult{Files: files, Logs: capResult.Logs}, nil
 }
 
 func RunUpload(ctx context.Context, inputPath, outputDir, variant, subtitleMode string, count int) (string, error) {
@@ -210,26 +222,31 @@ func filterNonEmptyStrings(values ...string) []string {
 	return filtered
 }
 
-func listScreenshotFiles(dir string) ([]string, error) {
+func listScreenshotFiles(dir string) ([]ScreenshotFileInfo, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
 
-	files := make([]string, 0, len(entries))
+	files := make([]ScreenshotFileInfo, 0, 16)
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
 		}
 		switch strings.ToLower(filepath.Ext(entry.Name())) {
 		case ".png", ".jpg", ".jpeg", ".gif", ".webp":
-			files = append(files, filepath.Join(dir, entry.Name()))
+			fullPath := filepath.Join(dir, entry.Name())
+			info, _ := entry.Info()
+			files = append(files, ScreenshotFileInfo{
+				Path: fullPath,
+				Name: entry.Name(),
+				Size: info.Size(),
+			})
 		}
 	}
 	if len(files) == 0 {
 		return nil, errors.New("no screenshots were generated")
 	}
-
-	sort.Strings(files)
+	sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
 	return files, nil
 }
