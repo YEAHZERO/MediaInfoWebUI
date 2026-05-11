@@ -1,12 +1,49 @@
 package subtitle
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 type SubtitleHandler interface {
 	BuildFilterChain(time float64, subtitleIndex int) string
 	BuildOutputArgs(outputDir, filename string) []string
 	SubtitleArgs() []string
 	NeedsBitmapOverlay() bool
+}
+
+func GetSubtitleHandler(ctx context.Context, ffprobe, sourcePath, subtitleMode string) (SubtitleHandler, int) {
+	mode := NormalizeSubtitleMode(subtitleMode)
+	if mode == "none" {
+		return &NoSubtitleHandler{}, -1
+	}
+
+	subtitleType := DetectSubtitleType(ctx, ffprobe, sourcePath)
+
+	switch subtitleType {
+	case "dvd":
+		idx := DetectSubtitleRelativeIndex(ctx, ffprobe, sourcePath)
+		return &DVDSubtitleHandler{}, idx
+	case "pgs":
+		idx := DetectSubtitleRelativeIndex(ctx, ffprobe, sourcePath)
+		return &PGSSubtitleHandler{}, idx
+	case "text":
+		idx := DetectSubtitleRelativeIndex(ctx, ffprobe, sourcePath)
+		return &TextSubtitleHandler{}, idx
+	default:
+		return &NoSubtitleHandler{}, -1
+	}
+}
+
+func NormalizeSubtitleMode(mode string) string {
+	switch mode {
+	case "none", "disable", "disabled", "off", "0", "false":
+		return "none"
+	case "force", "forced", "1", "true":
+		return "force"
+	default:
+		return "auto"
+	}
 }
 
 type TextSubtitleHandler struct{}

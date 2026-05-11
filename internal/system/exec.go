@@ -41,6 +41,7 @@ func RunCommandInDirLive(ctx context.Context, dir, bin string, onLine OutputLine
 func runCommand(ctx context.Context, dir, bin string, args ...string) (string, string, error) {
 	cmd := exec.Command(bin, args...)
 	cmd.Dir = dir
+	cmd.Env = commandEnv(ctx, bin)
 	setCommandProcessGroup(cmd)
 
 	stdoutFile, err := os.CreateTemp("", "mediainfo-stdout-*")
@@ -86,6 +87,7 @@ func runCommand(ctx context.Context, dir, bin string, args ...string) (string, s
 func runCommandLive(ctx context.Context, dir, bin string, onLine OutputLineHandler, args ...string) (string, string, error) {
 	cmd := exec.Command(bin, args...)
 	cmd.Dir = dir
+	cmd.Env = commandEnv(ctx, bin)
 	setCommandProcessGroup(cmd)
 
 	var stdoutBuf bytes.Buffer

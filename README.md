@@ -130,12 +130,13 @@
 docker run -d \
   --name mediainfo \
   --privileged \
-  -p 28888:28888 \
+  --network host \
   -e TZ=Asia/Shanghai \
   -e PORT=28888 \
   -e REQUEST_TIMEOUT=30m \
+  -e MEDIAINFO_BIN=/usr/bin/mediainfo \
   -v /lib/modules:/lib/modules:ro \
-  -v //home/live/qbittorrent/downloads:/media:ro \
+  -v /home/live/qbittorrent/downloads:/media:ro \
   --restart unless-stopped \
   ghcr.io/yeahzero/mediainfowebui:light
 
@@ -143,12 +144,13 @@ docker run -d \
 docker run -d \
   --name mediainfo \
   --privileged \
-  -p 28888:28888 \
+  --network host \
   -e TZ=Asia/Shanghai \
   -e PORT=28888 \
   -e REQUEST_TIMEOUT=30m \
+  -e MEDIAINFO_BIN=/usr/bin/mediainfo \
   -v /lib/modules:/lib/modules:ro \
-  -v //home/live/qbittorrent/downloads:/media:ro \
+  -v /home/live/qbittorrent/downloads:/media:ro \
   --restart unless-stopped \
   ghcr.io/yeahzero/mediainfowebui:latest
 
@@ -156,13 +158,14 @@ docker run -d \
 docker run -d \
   --name mediainfo \
   --privileged \
-  -p 28888:28888 \
+  --network host \
   -e TZ=Asia/Shanghai \
   -e PORT=28888 \
   -e REQUEST_TIMEOUT=30m \
   -e ENABLE_NATIVE_ENGINE=1 \
+  -e MEDIAINFO_BIN=/usr/bin/mediainfo \
   -v /lib/modules:/lib/modules:ro \
-  -v //home/live/qbittorrent/downloads:/media:ro \
+  -v /home/live/qbittorrent/downloads:/media:ro \
   --restart unless-stopped \
   ghcr.io/yeahzero/mediainfowebui:native
 ```

@@ -23,6 +23,8 @@ const (
 
 var RequestTimeout = DurationFromEnv("REQUEST_TIMEOUT", DefaultRequestTimeout)
 
+var FFmpegSSECompat = BoolFromEnv("FFMPEG_SSE_COMPAT", false)
+
 func Getenv(key, fallback string) string {
 	value := strings.TrimSpace(os.Getenv(key))
 	if value == "" {
@@ -43,4 +45,19 @@ func DurationFromEnv(key string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return duration
+}
+
+func BoolFromEnv(key string, fallback bool) bool {
+	value := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	switch value {
+	case "":
+		return fallback
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		log.Printf("invalid %s=%q; fallback to %t", key, value, fallback)
+		return fallback
+	}
 }

@@ -27,5 +27,10 @@ func NewHandler(assets fs.FS) http.Handler {
 	mux.HandleFunc("/api/bdinfo/report", handlers.BDInfoGetReportHandler)
 	mux.HandleFunc("/api/bdinfo/ws", handlers.BDInfoWebSocketHandler)
 
+	mux.HandleFunc("/api/info-jobs", handlers.InfoJobsHandler)
+	mux.HandleFunc("/api/info-jobs/", handlers.InfoJobHandler)
+	mux.HandleFunc("/api/screenshot-jobs", handlers.ScreenshotJobsHandler)
+	mux.HandleFunc("/api/screenshot-jobs/", handlers.ScreenshotJobHandler)
+
 	return middleware.Logging(middleware.Authenticate(mux))
 }

@@ -189,12 +189,16 @@ func (e *nativeEngine) Capture(ctx context.Context, opts CaptureOptions) (*Captu
 
 		hb.update(PhaseCapture, i+1, opts.Count, fmt.Sprintf("capturing %d/%d at %.1fs", i+1, opts.Count, second))
 
-		coarseSecond, fineSecond := splitTimeline(second, CoarseBackDefault)
+		coarseBack := CoarseBackDefault
+		if subtitleType == "pgs" || subtitleType == "dvd" {
+			coarseBack = coarseBackPGS
+		}
+		coarseSecond, fineSecond := splitTimeline(second, coarseBack)
 		coarseHMS := formatTimestamp(coarseSecond)
 
 		var captureErr error
 		if subtitleType == "pgs" || subtitleType == "dvd" {
-			captureErr = e.captureBitmapSubtitle(ctx, ffmpeg, ffprobe, sourcePath, outputPath, second, coarseHMS, fineSecond, handler, format)
+			captureErr = e.captureBitmapSubtitle(ctx, ffmpeg, ffprobe, sourcePath, outputPath, second, coarseHMS, fineSecond, handler, format, csInfo)
 		} else {
 			captureErr = e.captureFrame(ctx, ffmpeg, sourcePath, outputPath, coarseHMS, fineSecond, handler, format, subtitleIndex, csInfo)
 		}
@@ -242,19 +246,13 @@ func (e *nativeEngine) CompressIfNeeded(ctx context.Context, path string, thresh
 }
 
 func (e *nativeEngine) captureFrame(ctx context.Context, ffmpeg, source, output, coarseHMS string, fineSecond float64, handler SubtitleHandler, format OutputFormat, subtitleIndex int, csInfo *ColorSpaceInfo) error {
-	args := []string{
-		"-y",
-		"-v", "error",
-		"-fflags", "+genpts",
-		"-ss", coarseHMS,
-		"-i", source,
-		"-ss", fmt.Sprintf("%.3f", fineSecond),
-		"-map", "0:v:0",
-		"-frames:v", "1",
-		"-an",
-	}
+	args := buildCaptureFrameArgs(coarseHMS, source, fineSecond)
 
 	filterChain := e.buildVideoFilterChain(handler, subtitleIndex, fineSecond, csInfo)
+	if usesLibplaceboColorspace(csInfo) {
+		return e.captureWithLibplaceboFallback(ctx, ffmpeg, args, filterChain, handler, format, output, csInfo)
+	}
+
 	if filterChain != "" {
 		args = append(args, "-vf", filterChain)
 	}
@@ -268,6 +266,97 @@ func (e *nativeEngine) captureFrame(ctx context.Context, ffmpeg, source, output,
 		return fmt.Errorf("ffmpeg: %s", system.BestErrorMessage(err, stderr, ""))
 	}
 	return nil
+}
+
+func buildCaptureFrameArgs(coarseHMS string, source string, fineSecond float64) []string {
+	return []string{
+		"-y",
+		"-v", "error",
+		"-fflags", "+genpts",
+		"-ss", coarseHMS,
+		"-i", source,
+		"-ss", fmt.Sprintf("%.3f", fineSecond),
+		"-map", "0:v:0",
+		"-frames:v", "1",
+		"-an",
+	}
+}
+
+func (e *nativeEngine) captureWithLibplaceboFallback(ctx context.Context, ffmpeg string, args []string, filterChain string, handler SubtitleHandler, format OutputFormat, output string, csInfo *ColorSpaceInfo) error {
+	libplaceboChain := filterChain
+	if libplaceboChain == "" {
+		libplaceboChain = e.buildToneMappingFilter(csInfo)
+	}
+
+	captureArgs := append([]string{}, args...)
+	captureArgs = append(captureArgs, "-vf", libplaceboChain)
+	captureArgs = append(captureArgs, format.CodecArgs()...)
+	captureArgs = append(captureArgs, "-y")
+	captureArgs = append(captureArgs, handler.BuildOutputArgs(filepath.Dir(output), filepath.Base(output))...)
+
+	_, stderr, err := system.RunCommand(ctx, ffmpeg, captureArgs...)
+	if err == nil {
+		return nil
+	}
+
+	errMsg := system.BestErrorMessage(err, stderr, "")
+	if !isLibplaceboRenderCrashMessage(errMsg) {
+		return fmt.Errorf("ffmpeg: %s", errMsg)
+	}
+
+	fallbackFilter := buildFallbackToneMappingFilter(csInfo)
+	fallbackArgs := append([]string{}, args...)
+	if filterChain != "" {
+		existingParts := strings.SplitN(filterChain, ",", 2)
+		if len(existingParts) == 2 {
+			fallbackArgs = append(fallbackArgs, "-vf", fallbackFilter+","+existingParts[1])
+		} else {
+			fallbackArgs = append(fallbackArgs, "-vf", fallbackFilter)
+		}
+	} else {
+		fallbackArgs = append(fallbackArgs, "-vf", fallbackFilter)
+	}
+	fallbackArgs = append(fallbackArgs, format.CodecArgs()...)
+	fallbackArgs = append(fallbackArgs, "-y")
+	fallbackArgs = append(fallbackArgs, handler.BuildOutputArgs(filepath.Dir(output), filepath.Base(output))...)
+
+	_, stderr2, err2 := system.RunCommand(ctx, ffmpeg, fallbackArgs...)
+	if err2 != nil {
+		return fmt.Errorf("ffmpeg (fallback): %s", system.BestErrorMessage(err2, stderr2, ""))
+	}
+	return nil
+}
+
+func usesLibplaceboColorspace(csInfo *ColorSpaceInfo) bool {
+	if csInfo == nil {
+		return false
+	}
+	if csInfo.DolbyVision {
+		return true
+	}
+	if strings.Contains(csInfo.Transfer, "smpte2084") {
+		return true
+	}
+	if strings.Contains(csInfo.Transfer, "arib-std-b67") || strings.Contains(csInfo.Transfer, "arib") {
+		return true
+	}
+	return false
+}
+
+func isLibplaceboRenderCrashMessage(message string) bool {
+	lower := strings.ToLower(message)
+	return strings.Contains(lower, "libplacebo") ||
+		strings.Contains(lower, "vkcreateinstance") ||
+		strings.Contains(lower, "vulkan") ||
+		strings.Contains(lower, "failed to create vulkan device") ||
+		strings.Contains(lower, "failed to initialize vulkan")
+}
+
+func buildFallbackToneMappingFilter(csInfo *ColorSpaceInfo) string {
+	if csInfo.DolbyVision {
+		return "zscale=transfer=linear,tonemap=hable,zscale=transfer=bt709"
+	}
+	return "zscale=transfer=linear,tonemap=hable,zscale=transfer=bt709"
 }
 
 func (e *nativeEngine) buildVideoFilterChain(handler SubtitleHandler, subtitleIndex int, time float64, csInfo *ColorSpaceInfo) string {
@@ -315,15 +404,15 @@ func (e *nativeEngine) buildToneMappingFilter(csInfo *ColorSpaceInfo) string {
 	return "libplacebo=format=rgb48:tonemap=bt2390:peak=100"
 }
 
-func (e *nativeEngine) captureBitmapSubtitle(ctx context.Context, ffmpeg, ffprobe, source, output string, second float64, coarseHMS string, fineSecond float64, handler SubtitleHandler, format OutputFormat) error {
-	overlayDir, err := os.MkdirTemp("", "pgs-overlay-*")
+func (e *nativeEngine) captureBitmapSubtitle(ctx context.Context, ffmpeg, ffprobe, source, output string, second float64, coarseHMS string, fineSecond float64, handler SubtitleHandler, format OutputFormat, csInfo *ColorSpaceInfo) error {
+	overlayDir, err := os.MkdirTemp("", "bitmap-overlay-*")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(overlayDir)
 
 	baseFrame := filepath.Join(overlayDir, "base.png")
-	if err := e.captureFrame(ctx, ffmpeg, source, baseFrame, coarseHMS, fineSecond, &noSubtitleHandler{}, format, -1, nil); err != nil {
+	if err := e.captureFrame(ctx, ffmpeg, source, baseFrame, coarseHMS, fineSecond, &noSubtitleHandler{}, format, -1, csInfo); err != nil {
 		return err
 	}
 

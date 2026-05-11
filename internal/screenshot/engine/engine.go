@@ -20,6 +20,7 @@ const (
 	AnalyzeDefault    = "150M"
 	CoarseBackDefault = 12
 	FineSeekDefault   = 2
+	coarseBackPGS     = 14
 )
 
 type ColorSpace int
