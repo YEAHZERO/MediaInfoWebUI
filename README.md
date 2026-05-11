@@ -58,14 +58,13 @@
 
 ### 字幕处理 🎬
 
-- 🔍 **智能字幕选轨**：外挂字幕 → 内封字幕自动排序，支持中英文优先级
-- 🖼️ **PGS 字幕渲染**：提取 PGS→PNG 覆盖层 → filter_complex 叠加
-- 💿 **DVD 字幕支持**：dvdsub/dvd_subtitle 自动检测与 bitmap 叠加
-- 📝 **ASS 文字字幕增强**：嵌入式字体提取（mkvextract）+ fontsdir 渲染
+- 🎯 **字幕对齐校准**（v1.5.1 完整实现）：`SnapFromIndex` 全片字幕索引对齐，PGS/DVD 6s，文本 2s epsilon
+- 🔍 **智能字幕选轨**：外挂字幕 → 内封字幕 → 无字幕三级降级，支持中英文优先级
+- 🗂️ **蓝光字幕选轨**：bdsub 二进制解析 MPLS/CLPI → ffprobe 联合探测 → payload/bitrate 密度排序
 - 🔄 **PGS 逐个段探测**：完整字幕索引扫描 + 可见性检测回溯
-- 🎯 **字幕对齐校准**：截图时间自动对齐到最近字幕
-- 🗂️ **蓝光字幕上下文**：bdsub（MPLS/CLPI）元数据 + ffprobe 联合探测
+- 💿 **DVD 字幕支持**：dvdsub/dvd\_subtitle 自动检测与 bitmap 叠加，IFO/BUP 语言回退
 - 📦 **嵌入式字体提取**：自动提取 MKV 附件字体用于 ASS 字幕渲染
+- 📝 **ASS 文字字幕增强**：mkvextract 字体提取 + fontsdir 渲染
 
 ### BDInfo
 
@@ -118,11 +117,11 @@
 
 ### 镜像标签选择
 
-| 标签 | 描述 | 引擎 | 适用场景 |
-|------|------|------|---------|
-| `:light` | 轻量版 | 脚本引擎 | 仅基础 mediainfo + 截图 |
-| `:latest` | 标准版（推荐） | 脚本引擎 | 日常使用，功能完整 |
-| `:native` | 全功能版 | Native 引擎 | 需要 HDR 色调映射、高级字幕渲染 |
+| 标签        | 描述      | 引擎        | 适用场景               |
+| --------- | ------- | --------- | ------------------ |
+| `:light`  | 轻量版     | 脚本引擎      | 仅基础 mediainfo + 截图 |
+| `:latest` | 标准版（推荐） | 脚本引擎      | 日常使用，功能完整          |
+| `:native` | 全功能版    | Native 引擎 | 需要 HDR 色调映射、高级字幕渲染 |
 
 ### 一行命令部署
 
@@ -205,19 +204,19 @@ docker run -d --name mediainfo --privileged --network host \
 
 ### 部署配置参考
 
-| 环境变量 | 默认值 | 说明 |
-|---------|--------|------|
-| `PORT` | `28888` | 服务端口 |
-| `TZ` | `Asia/Shanghai` | 时区 |
-| `REQUEST_TIMEOUT` | `20m` | 请求超时（大文件建议 `30m`） |
-| `ENGINE_TYPE` | `script` | 截图引擎：`script`（脚本引擎）或 `native`（原生引擎） |
-| `ENABLE_NATIVE_ENGINE` | `0` | 启用原生截图引擎（等价 `ENGINE_TYPE=native`） |
-| `SCREENSHOT_COMPRESS_THRESHOLD` | `10485760` | 截图压缩阈值（字节） |
-| `SCREENSHOT_COMPRESS_STRATEGY` | `auto` | 压缩策略：`lossless`/`lossy`/`auto` |
-| `OXIPNG_BIN` | `oxipng` | oxipng 路径 |
-| `PNGQUANT_BIN` | `pngquant` | pngquant 路径 |
-| `MEDIAINFO_BIN` | `/usr/bin/mediainfo` | MediaInfo CLI 路径 |
-| `MKVMERGE_BIN` | `mkvmerge` | mkvmerge 路径（默认从 PATH 查找） |
+| 环境变量                            | 默认值                  | 说明                                  |
+| ------------------------------- | -------------------- | ----------------------------------- |
+| `PORT`                          | `28888`              | 服务端口                                |
+| `TZ`                            | `Asia/Shanghai`      | 时区                                  |
+| `REQUEST_TIMEOUT`               | `20m`                | 请求超时（大文件建议 `30m`）                   |
+| `ENGINE_TYPE`                   | `script`             | 截图引擎：`script`（脚本引擎）或 `native`（原生引擎） |
+| `ENABLE_NATIVE_ENGINE`          | `0`                  | 启用原生截图引擎（等价 `ENGINE_TYPE=native`）   |
+| `SCREENSHOT_COMPRESS_THRESHOLD` | `10485760`           | 截图压缩阈值（字节）                          |
+| `SCREENSHOT_COMPRESS_STRATEGY`  | `auto`               | 压缩策略：`lossless`/`lossy`/`auto`      |
+| `OXIPNG_BIN`                    | `oxipng`             | oxipng 路径                           |
+| `PNGQUANT_BIN`                  | `pngquant`           | pngquant 路径                         |
+| `MEDIAINFO_BIN`                 | `/usr/bin/mediainfo` | MediaInfo CLI 路径                    |
+| `MKVMERGE_BIN`                  | `mkvmerge`           | mkvmerge 路径（默认从 PATH 查找）            |
 
 ***
 
@@ -294,25 +293,25 @@ docker logs mediainfo --tail 20       # 查看启动日志
 
 ### 基础 API
 
-| 端点 | 方法 | 说明 |
-|:----|:----|:----|
-| `/api/mediainfo` | POST | 获取 MediaInfo 信息 |
-| `/api/bdinfo` | POST | 获取 BDInfo 信息 |
+| 端点                     | 方法   | 说明               |
+| :--------------------- | :--- | :--------------- |
+| `/api/mediainfo`       | POST | 获取 MediaInfo 信息  |
+| `/api/bdinfo`          | POST | 获取 BDInfo 信息     |
 | `/api/mkvmerge/tracks` | POST | 获取 mkvmerge 轨道信息 |
-| `/api/screenshots` | POST | 生成截图 |
-| `/api/path` | GET | 路径浏览 |
-| `/api/version` | GET | 获取版本信息 |
+| `/api/screenshots`     | POST | 生成截图             |
+| `/api/path`            | GET  | 路径浏览             |
+| `/api/version`         | GET  | 获取版本信息           |
 
 ### BDInfo 任务 API ✨
 
-| 端点 | 方法 | 说明 |
-|:----|:----|:----|
-| `/api/bdinfo/playlists` | POST | 获取 Playlist 列表和推荐 |
-| `/api/bdinfo/jobs` | GET | 获取历史任务列表 |
-| `/api/bdinfo/job/create` | POST | 创建扫描任务 |
-| `/api/bdinfo/job` | GET | 获取任务详情 |
-| `/api/bdinfo/report` | GET | 获取扫描报告 |
-| `/api/bdinfo/ws` | GET | WebSocket 实时进度 |
+| 端点                       | 方法   | 说明                |
+| :----------------------- | :--- | :---------------- |
+| `/api/bdinfo/playlists`  | POST | 获取 Playlist 列表和推荐 |
+| `/api/bdinfo/jobs`       | GET  | 获取历史任务列表          |
+| `/api/bdinfo/job/create` | POST | 创建扫描任务            |
+| `/api/bdinfo/job`        | GET  | 获取任务详情            |
+| `/api/bdinfo/report`     | GET  | 获取扫描报告            |
+| `/api/bdinfo/ws`         | GET  | WebSocket 实时进度    |
 
 ***
 
@@ -478,14 +477,14 @@ docker inspect mediainfo | grep Privileged
 
 ## 更新日志
 
-### [1.5.2] - 2026-05-12
+### \[1.5.2] - 2026-05-12
 
 **文档优化**
 
 - 更新日志优化：去除重复内容，明确说明 v1.5 前的功能记录与实际完整实现的区别
 - 版本号同步至 v1.5.2
 
-### [1.5.1] - 2026-05-12
+### \[1.5.1] - 2026-05-12
 
 **修复**
 
@@ -498,7 +497,7 @@ docker inspect mediainfo | grep Privileged
 - libplacebo 回退机制验证完毕：`captureWithLibplaceboFallback` 崩溃检测 + `buildFallbackToneMappingFilter` 自动回退，覆盖 HDR10/HLG/Dolby Vision
 - 截图字幕对齐新增日志输出：`[信息] 字幕对齐: 请求 X.XXs → 对齐到字幕 X.XXs`
 
-### [1.5.0] - 2026-05-11
+### \[1.5.0] - 2026-05-11
 
 **重构 - 截图 Runner 架构（minfo-master 移植）**
 
@@ -539,16 +538,7 @@ docker inspect mediainfo | grep Privileged
 
 - Runner 编译错误：`PrepareBlurayProbeContext` 改为方法调用、`SubtitleBitmapVisibilityStepPercent` 移除、`captureScreenshot` 正确处理 `(*CaptureResult, error)` 返回
 
-### [1.4.3] - 2026-05-11
-
-> 注：此版本列出的多项功能（字幕对齐、DVD 完整解析、PGS 字幕探测）在 **v1.5.0/v1.5.1** 才真正完整实现
-
-**变更记录**
-
-- Dockerfile 参考 minfo 结构重构，增加 BDInfo 构建
-- 多阶段构建优化，减小最终镜像体积
-
-### [1.4.2] - 2026-05-10
+### \[1.4.2] - 2026-05-10
 
 **修复**
 
@@ -556,7 +546,7 @@ docker inspect mediainfo | grep Privileged
 - MediaInfo CLI 路径问题：`ENV MEDIAINFO_BIN=/usr/bin/mediainfo`
 - 日志显示从 `localhost` 改为 `0.0.0.0`
 
-### [1.4.0] - 2026-05-10
+### \[1.4.0] - 2026-05-10
 
 **新增**
 
@@ -569,7 +559,7 @@ docker inspect mediainfo | grep Privileged
 - 命名统一为 mediainfo
 - 端口默认 28888
 
-### [1.3.0] - 2026-05-10
+### \[1.3.0] - 2026-05-10
 
 **新增**
 
@@ -579,7 +569,7 @@ docker inspect mediainfo | grep Privileged
 - DVD 全支持（NativeEngine）
 - libplacebo HDR/DV 色彩映射
 
-### [1.2.0] - 2026-05-10
+### \[1.2.0] - 2026-05-10
 
 **新增**
 
@@ -591,21 +581,21 @@ docker inspect mediainfo | grep Privileged
 
 - 路径解析策略模式（PathType 枚举 + PathResolver 接口）
 
-### [1.1.4] - 2026-04-04
+### \[1.1.4] - 2026-04-04
 
 **变更**
 
 - 移除所有硬编码本地路径
 - 统一通用路径示例
 
-### [1.1.3] - 2026-04-04
+### \[1.1.3] - 2026-04-04
 
 **新增**
 
 - BDInfo 高级交互式界面
 - Playlist 列表管理、主片标记
 
-### [1.1.0] - 2026-04-04
+### \[1.1.0] - 2026-04-04
 
 **新增**
 
@@ -613,7 +603,7 @@ docker inspect mediainfo | grep Privileged
 - BDInfo 递归查找
 - 版本信息自动获取
 
-### [1.0.0] - 2026-04-02
+### \[1.0.0] - 2026-04-02
 
 **新增**
 
