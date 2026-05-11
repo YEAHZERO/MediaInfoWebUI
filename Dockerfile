@@ -94,7 +94,9 @@ RUN set -eux; \
         udftools \
         kmod \
         util-linux \
-        tzdata
+        tzdata \
+        font-noto-cjk \
+        fontconfig
 
 COPY --from=build /out/mediainfo /usr/local/bin/mediainfo
 COPY --from=media-helper-build /out/bdsub /usr/local/bin/bdsub
@@ -124,7 +126,9 @@ RUN set -eux; \
         udftools \
         kmod \
         util-linux \
-        tzdata
+        tzdata \
+        font-noto-cjk \
+        fontconfig
 
 COPY --from=build /out/mediainfo /usr/local/bin/mediainfo
 COPY --from=media-helper-build /out/bdsub /usr/local/bin/bdsub
@@ -160,7 +164,9 @@ RUN set -eux; \
         oxipng \
         pngquant \
         util-linux \
-        tzdata
+        tzdata \
+        font-noto-cjk \
+        fontconfig
 
 COPY --from=build-native /out/mediainfo /usr/local/bin/mediainfo
 COPY --from=media-helper-build /out/bdsub /usr/local/bin/bdsub
