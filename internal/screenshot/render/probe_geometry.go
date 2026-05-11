@@ -17,7 +17,7 @@ type VideoGeometry struct {
 }
 
 func ProbeGeometry(ctx context.Context, ffprobe, sourcePath string) (*VideoGeometry, error) {
-	stdout, stderr, err := system.RunCommand(ctx, ffprobe,
+	stdout, _, err := system.RunCommand(ctx, ffprobe,
 		"-v", "error",
 		"-select_streams", "v:0",
 		"-show_entries", "stream=width:stream=height:stream=display_aspect_ratio:stream=sample_aspect_ratio:stream=rotation",
@@ -25,7 +25,7 @@ func ProbeGeometry(ctx context.Context, ffprobe, sourcePath string) (*VideoGeome
 		sourcePath,
 	)
 	if err != nil {
-		return nil, system.NewCommandError(err, stdout, stderr)
+		return nil, err
 	}
 
 	geom := &VideoGeometry{}

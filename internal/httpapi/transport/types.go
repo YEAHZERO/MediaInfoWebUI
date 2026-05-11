@@ -25,6 +25,6 @@ type PathResponse struct {
 	OK    bool     `json:"ok"`
 	Root  string   `json:"root,omitempty"`
 	Roots []string `json:"roots,omitempty"`
-	Items []string `json:"items,omitempty"`
+	Items []any    `json:"items,omitempty"`
 	Error string   `json:"error,omitempty"`
 }

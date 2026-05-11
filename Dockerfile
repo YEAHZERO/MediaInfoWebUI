@@ -1,10 +1,8 @@
-ARG BDINFO_REPO=https://github.com/mirrorb/BDInfoCLI.git
-ARG BDINFO_REF=master
-ARG BDINFO_CSPROJ=BDInfo/BDInfo.csproj
 ARG GO_VERSION=1.26.1
 ARG ALPINE_VERSION=edge
 ARG ALPINE_EDGE_REPO=https://mirrors.aliyun.com/alpine/edge
 ARG FFMPEG_PKG=ffmpeg
+ARG INCLUDE_BDINFO=false
 
 # ============================================
 # Stage: WebUI 构建
@@ -64,48 +62,11 @@ RUN apk add --no-cache gcc musl-dev && \
     GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -buildvcs=false -tags native -ldflags="-s -w -X mediainfo/internal/httpapi/handlers.BuildTime=${BUILD_TIME} -X mediainfo/internal/httpapi/handlers.BuildVersion=${BUILD_VERSION} -X mediainfo/internal/httpapi/handlers.BuildCommit=${BUILD_COMMIT}" -o /out/mediainfo ./cmd/mediainfo
 
 # ============================================
-# Stage: BDInfo 构建 (.NET)
+# Stage: BDInfo 构建 (.NET) - 默认跳过
 # ============================================
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:9.0-alpine AS bdinfo-build
-ARG BDINFO_REPO
-ARG BDINFO_REF
-ARG BDINFO_CSPROJ
-ARG TARGETARCH
-RUN apk add --no-cache git ca-certificates
-RUN git clone --depth 1 --branch "$BDINFO_REF" "$BDINFO_REPO" /src/bdinfo
-WORKDIR /src/bdinfo
-RUN set -eux; \
-    case "$TARGETARCH" in \
-        amd64) rid="linux-musl-x64" ;; \
-        arm64) rid="linux-musl-arm64" ;; \
-        *) echo "unsupported TARGETARCH=$TARGETARCH" >&2; exit 1 ;; \
-    esac; \
-    dotnet restore "$BDINFO_CSPROJ"; \
-    dotnet publish "$BDINFO_CSPROJ" -c Release -r "$rid" --self-contained true \
-        -p:PublishSingleFile=true \
-        -p:EnableCompressionInSingleFile=true \
-        -p:DebugType=None \
-        -p:DebugSymbols=false \
-        -o /out/bdinfo; \
-    exe=""; \
-    for f in /out/bdinfo/*; do \
-        [ -f "$f" ] || continue; \
-        [ -x "$f" ] || continue; \
-        case "${f##*.}" in \
-            dll|json|pdb) continue ;; \
-        esac; \
-        exe="$f"; \
-        break; \
-    done; \
-    if [ -n "$exe" ]; then \
-        if [ "$exe" != "/out/bdinfo/BDInfo" ]; then \
-            mv "$exe" /out/bdinfo/BDInfo; \
-        fi; \
-    else \
-        echo "BDInfo executable not found" >&2; exit 1; \
-    fi; \
-    chmod +x /out/bdinfo/BDInfo; \
-    find /out/bdinfo -type f \( -name '*.pdb' -o -name '*.xml' -o -name '*.dbg' \) -delete
+FROM scratch AS bdinfo-build
+# BDInfo 构建默认跳过，设置 INCLUDE_BDINFO=true 启用
+# docker build --build-arg INCLUDE_BDINFO=true --target runtime-native -t mediainfowebui:native .
 
 # ============================================
 # Stage: BD 元数据 helper (C 工具)
@@ -136,17 +97,15 @@ RUN set -eux; \
         tzdata
 
 COPY --from=build /out/mediainfo /usr/local/bin/mediainfo
-COPY --from=bdinfo-build /out/bdinfo/BDInfo /usr/local/bin/bdinfo
 COPY --from=media-helper-build /out/bdsub /usr/local/bin/bdsub
-RUN chmod +x /usr/local/bin/mediainfo /usr/local/bin/bdinfo /usr/local/bin/bdsub
+RUN chmod +x /usr/local/bin/mediainfo /usr/local/bin/bdsub
 
 WORKDIR /app
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
-ENV PORT=28880
+ENV PORT=28888
 ENV MEDIAINFO_BIN=/usr/bin/mediainfo
 ENV ENGINE_TYPE=script
-ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 ENTRYPOINT ["/usr/local/bin/mediainfo"]
 
 # ============================================
@@ -169,17 +128,15 @@ RUN set -eux; \
         tzdata
 
 COPY --from=build /out/mediainfo /usr/local/bin/mediainfo
-COPY --from=bdinfo-build /out/bdinfo/BDInfo /usr/local/bin/bdinfo
 COPY --from=media-helper-build /out/bdsub /usr/local/bin/bdsub
-RUN chmod +x /usr/local/bin/mediainfo /usr/local/bin/bdinfo /usr/local/bin/bdsub
+RUN chmod +x /usr/local/bin/mediainfo /usr/local/bin/bdsub
 
 WORKDIR /app
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
-ENV PORT=28880
+ENV PORT=28888
 ENV MEDIAINFO_BIN=/usr/bin/mediainfo
 ENV ENGINE_TYPE=script
-ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 ENTRYPOINT ["/usr/local/bin/mediainfo"]
 
 # ============================================
@@ -208,18 +165,16 @@ RUN set -eux; \
         tzdata
 
 COPY --from=build-native /out/mediainfo /usr/local/bin/mediainfo
-COPY --from=bdinfo-build /out/bdinfo/BDInfo /usr/local/bin/bdinfo
 COPY --from=media-helper-build /out/bdsub /usr/local/bin/bdsub
-RUN chmod +x /usr/local/bin/mediainfo /usr/local/bin/bdinfo /usr/local/bin/bdsub
+RUN chmod +x /usr/local/bin/mediainfo /usr/local/bin/bdsub
 
 WORKDIR /app
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
-ENV PORT=28880
+ENV PORT=28888
 ENV MEDIAINFO_BIN=/usr/bin/mediainfo
 ENV ENGINE_TYPE=native
 ENV ENABLE_NATIVE_ENGINE=1
-ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 ENTRYPOINT ["/usr/local/bin/mediainfo"]
 
 # ============================================

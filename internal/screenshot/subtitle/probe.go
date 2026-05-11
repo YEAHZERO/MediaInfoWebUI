@@ -18,7 +18,7 @@ type SubtitleInfo struct {
 }
 
 func ProbeSubtitles(ctx context.Context, ffprobe, sourcePath string) ([]SubtitleInfo, error) {
-	stdout, stderr, err := system.RunCommand(ctx, ffprobe,
+	stdout, _, err := system.RunCommand(ctx, ffprobe,
 		"-v", "error",
 		"-select_streams", "s",
 		"-show_entries", "stream=codec_name:stream=index:stream=language:stream=disposition",
@@ -26,7 +26,7 @@ func ProbeSubtitles(ctx context.Context, ffprobe, sourcePath string) ([]Subtitle
 		sourcePath,
 	)
 	if err != nil {
-		return nil, system.NewCommandError(err, stdout, stderr)
+		return nil, err
 	}
 
 	var subs []SubtitleInfo

@@ -17,7 +17,7 @@ type ColorSpaceInfo struct {
 }
 
 func ProbeColorSpace(ctx context.Context, ffprobe, sourcePath string) (*ColorSpaceInfo, error) {
-	stdout, stderr, err := system.RunCommand(ctx, ffprobe,
+	stdout, _, err := system.RunCommand(ctx, ffprobe,
 		"-v", "error",
 		"-select_streams", "v:0",
 		"-show_entries", "stream=color_transfer:stream=color_space:stream=bits_per_raw_sample",
@@ -25,7 +25,7 @@ func ProbeColorSpace(ctx context.Context, ffprobe, sourcePath string) (*ColorSpa
 		sourcePath,
 	)
 	if err != nil {
-		return nil, system.NewCommandError(err, stdout, stderr)
+		return nil, err
 	}
 
 	info := &ColorSpaceInfo{}

@@ -3,8 +3,6 @@ package subtitle
 import (
 	"context"
 	"strings"
-
-	"mediainfo/internal/system"
 )
 
 func SelectBestSubtitle(ctx context.Context, ffprobe, sourcePath string) (*SubtitleInfo, error) {

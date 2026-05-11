@@ -1,72 +1,54 @@
-.PHONY: help webui-install webui-dev webui-build backend-dev test build run release-check docker-build docker-run docker-push docker-clean
+# MediaInfoWebUI - Makefile
+# 本地开发：make build
+# Docker 构建：make docker-light / docker-standard / docker-native
 
-ifneq (,$(wildcard ./.env))
-include .env
-export
-endif
+BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+BUILD_VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+BUILD_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+LDFLAGS := -s -w -X mediainfo/internal/httpapi/handlers.BuildTime=$(BUILD_TIME) -X mediainfo/internal/httpapi/handlers.BuildVersion=$(BUILD_VERSION) -X mediainfo/internal/httpapi/handlers.BuildCommit=$(BUILD_COMMIT)
 
-GO ?= go
-NPM ?= npm
-PORT ?= 28888
-WEBUI_PORT ?= 28081
-GOCACHE ?= $(CURDIR)/.gocache
-WEBUI_DIR := webui
-BINARY := ./bin/mediainfo
-IMAGE_NAME ?= ghcr.io/yeahzero/mediainfowebui
-IMAGE_TAG ?= latest
+.PHONY: build build-native webui clean
 
-help:
-	@printf '%s\n' \
-		'make webui-install    # 安装前端依赖' \
-		'make webui-dev        # 启动前端 Vite 开发服务器 (28081)' \
-		'make backend-dev      # 启动 Go 后端 (28888)' \
-		'make test             # 运行 Go 测试' \
-		'make build            # 先构建前端，再构建 Go 二进制' \
-		'make run              # 运行构建后的二进制' \
-		'make release-check    # 发布前检查：前端构建 + Go 测试 + Go 构建' \
-		'make docker-build     # 构建 Docker 镜像 (使用 host 网络)' \
-		'make docker-run       # 运行 Docker 镜像' \
-		'make docker-push      # 推送 Docker 镜像到 GitHub' \
-		'make docker-clean     # 清理不需要的镜像'
+webui:
+	cd webui && npm install --no-audit --no-fund && npm run build
 
-webui-install:
-	./scripts/bootstrap-webui.sh
+build: webui
+	CGO_ENABLED=0 go build -trimpath -ldflags="$(LDFLAGS)" -o mediainfo ./cmd/mediainfo
 
-webui-dev:
-	cd $(WEBUI_DIR) && $(NPM) run dev -- --host 0.0.0.0 --port $(WEBUI_PORT)
-
-backend-dev:
-	mkdir -p $(GOCACHE)
-	GOCACHE=$(GOCACHE) PORT=$(PORT) $(GO) run ./cmd/mediainfo
-
-test:
-	mkdir -p $(GOCACHE)
-	GOCACHE=$(GOCACHE) $(GO) test ./...
-
-build: webui-build
-	mkdir -p $(GOCACHE) ./bin
-	GOCACHE=$(GOCACHE) $(GO) build -trimpath -buildvcs=false -o $(BINARY) ./cmd/mediainfo
+build-native: webui
+	CGO_ENABLED=1 go build -trimpath -tags native -ldflags="$(LDFLAGS)" -o mediainfo ./cmd/mediainfo
 
 run: build
-	PORT=$(PORT) $(BINARY)
+	./mediainfo
 
-release-check: test build
+run-native: build-native
+	./mediainfo
 
-docker-build:
-	docker build --network=host -t $(IMAGE_NAME):$(IMAGE_TAG) .
+clean:
+	rm -f mediainfo
+	rm -rf webui/dist
 
-docker-run:
-	docker run --rm -p $(PORT):$(PORT) --name mediainfo-test $(IMAGE_NAME):$(IMAGE_TAG)
+docker-light:
+	docker build --network=host --target runtime-light -t mediainfowebui:light .
 
-docker-push:
-	docker push $(IMAGE_NAME):$(IMAGE_TAG)
+docker-standard:
+	docker build --network=host --target runtime-standard -t mediainfowebui:latest .
 
-docker-clean:
-	@echo "清理悬空镜像..."
-	docker image prune -f
-	@echo "删除旧版本镜像..."
-	docker rmi mediainfowebui:latest 2>/dev/null || true
-	docker rmi mediainfowebui:v1.0.0 2>/dev/null || true
-	docker rmi mediainfo:local 2>/dev/null || true
-	@echo "完成！当前镜像列表："
-	docker images | grep -E "mediainfowebui|mediainfo|REPOSITORY"
+docker-native:
+	docker build --network=host --target runtime-native -t mediainfowebui:native .
+
+docker-all: docker-light docker-standard docker-native
+
+push-light:
+	docker tag mediainfowebui:light ghcr.io/yeahzero/mediainfowebui:light
+	docker push ghcr.io/yeahzero/mediainfowebui:light
+
+push-standard:
+	docker tag mediainfowebui:latest ghcr.io/yeahzero/mediainfowebui:latest
+	docker push ghcr.io/yeahzero/mediainfowebui:latest
+
+push-native:
+	docker tag mediainfowebui:native ghcr.io/yeahzero/mediainfowebui:native
+	docker push ghcr.io/yeahzero/mediainfowebui:native
+
+push-all: push-light push-standard push-native

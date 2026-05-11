@@ -21,14 +21,14 @@ func ParseDuration(stdout string) (float64, error) {
 }
 
 func ProbeDuration(ctx context.Context, ffprobe, sourcePath string) (float64, error) {
-	stdout, stderr, err := system.RunCommand(ctx, ffprobe,
+	stdout, _, err := system.RunCommand(ctx, ffprobe,
 		"-v", "error",
 		"-show_entries", "format=duration",
 		"-of", "default=noprint_wrappers=1:nokey=1",
 		sourcePath,
 	)
 	if err != nil {
-		return 0, system.NewCommandError(err, stdout, stderr)
+		return 0, err
 	}
 	return ParseDuration(stdout)
 }

@@ -119,7 +119,7 @@ func resolveVirtualISOPath(ctx context.Context, input string) (string, func(), e
 
 	target := mountDir
 	if inner != "/" {
-		target = filepath.Join(mountDir, filepath.FromSlash(strings.TrimPrefix(inner, "/"))
+		target = filepath.Join(mountDir, filepath.FromSlash(strings.TrimPrefix(inner, "/")))
 	}
 	target = filepath.Clean(target)
 	if !isSubpath(mountDir, target) {
@@ -132,12 +132,4 @@ func resolveVirtualISOPath(ctx context.Context, input string) (string, func(), e
 	}
 
 	return target, cleanup, nil
-}
-
-func isSubpath(base, target string) bool {
-	rel, err := filepath.Rel(base, target)
-	if err != nil {
-		return false
-	}
-	return !strings.HasPrefix(rel, "..")
 }

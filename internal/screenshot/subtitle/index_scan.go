@@ -1,7 +1,6 @@
 package subtitle
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"sort"
@@ -9,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	runtime "mediainfo/internal/screenshot/runtime"
 	"mediainfo/internal/screenshot/timestamps"
 	"mediainfo/internal/system"
 )
@@ -31,13 +31,13 @@ func pgsBitmapPacketMinSize() int { return 1500 }
 
 func dvdBitmapPacketMinSize() int { return 1 }
 
-func (r *Runner) buildIndex() []SubtitleSpan {
+func (r *Runner) buildIndex() []runtime.SubtitleSpan {
 	selection := r.selection()
 	if selection.Mode == "none" {
 		return nil
 	}
 
-	var spans []SubtitleSpan
+	var spans []runtime.SubtitleSpan
 	var err error
 
 	if selection.Mode == "internal" && r.isSupportedBitmapSubtitle() {
@@ -79,7 +79,7 @@ func (r *Runner) ShouldEmitIndexProgress() bool {
 }
 
 func (r *Runner) canApproximateIndexScanProgress() bool {
-	return r != nil && r.media().Duration > 0
+	return r != nil && r.media.Duration > 0
 }
 
 func (r *Runner) indexProgressDetail() string {
@@ -98,7 +98,7 @@ func (r *Runner) indexProgressDetail() string {
 	}
 }
 
-func (r *Runner) EnsureIndex() []SubtitleSpan {
+func (r *Runner) EnsureIndex() []runtime.SubtitleSpan {
 	if r == nil {
 		return nil
 	}
@@ -139,17 +139,17 @@ func newIndexProgressEmitter(r *Runner, internal bool, startAbs, duration float6
 
 	scanStart := 0.0
 	if internal {
-		scanStart = math.Max(r.media().StartOffset, 0)
+		scanStart = math.Max(r.media.StartOffset, 0)
 	}
 	emitter.baseDetail = r.indexProgressDetail()
 	emitter.scanStart = scanStart
-	emitter.scanTotal = r.media().Duration
+	emitter.scanTotal = r.media.Duration
 	emitter.maxPTS = scanStart
 	emitter.enabled = emitter.scanTotal > 0
 	return emitter
 }
 
-func (e *indexProgressEmitter) observe(packet FFprobePacket) {
+func (e *indexProgressEmitter) observe(packet runtime.FFprobePacket) {
 	if e == nil || !e.enabled || e.runner == nil {
 		return
 	}
@@ -204,7 +204,7 @@ func (e *indexProgressEmitter) shouldEmit(scanned, percent float64) bool {
 	return time.Since(e.lastEmitAt) >= time.Second && percent > e.lastPercent
 }
 
-func (r *Runner) probeSupportedBitmapSpans(startAbs, duration float64) ([]SubtitleSpan, error) {
+func (r *Runner) probeSupportedBitmapSpans(startAbs, duration float64) ([]runtime.SubtitleSpan, error) {
 	switch {
 	case r.isPGSSubtitle():
 		return r.probePGSSubtitleSpans(startAbs, duration)
@@ -215,15 +215,15 @@ func (r *Runner) probeSupportedBitmapSpans(startAbs, duration float64) ([]Subtit
 	}
 }
 
-func (r *Runner) probePGSSubtitleSpans(startAbs, duration float64) ([]SubtitleSpan, error) {
+func (r *Runner) probePGSSubtitleSpans(startAbs, duration float64) ([]runtime.SubtitleSpan, error) {
 	return r.probeInternalBitmapSpans(startAbs, duration, pgsBitmapPacketMinSize())
 }
 
-func (r *Runner) probeDVDSubtitleSpans(startAbs, duration float64) ([]SubtitleSpan, error) {
+func (r *Runner) probeDVDSubtitleSpans(startAbs, duration float64) ([]runtime.SubtitleSpan, error) {
 	return r.probeInternalBitmapSpans(startAbs, duration, dvdBitmapPacketMinSize())
 }
 
-func (r *Runner) probeInternalBitmapSpans(startAbs, duration float64, bitmapMinSize int) ([]SubtitleSpan, error) {
+func (r *Runner) probeInternalBitmapSpans(startAbs, duration float64, bitmapMinSize int) ([]runtime.SubtitleSpan, error) {
 	args := []string{
 		"-probesize", r.Settings.ProbeSize,
 		"-analyzeduration", r.Settings.Analyze,
@@ -231,7 +231,7 @@ func (r *Runner) probeInternalBitmapSpans(startAbs, duration float64, bitmapMinS
 		"-select_streams", fmt.Sprintf("s:%d", r.selection().RelativeIndex),
 	}
 	if startAbs >= 0 {
-		args = append(args, "-read_intervals", timestamps.ReadInterval(startAbs, duration))
+		args = append(args, "-read_intervals", timestamps.SecToHMS(startAbs)+"+"+timestamps.SecToHMS(duration))
 	}
 	args = append(args,
 		"-show_packets",
@@ -242,7 +242,7 @@ func (r *Runner) probeInternalBitmapSpans(startAbs, duration float64, bitmapMinS
 	return r.ProbePacketSpans(args, true, bitmapMinSize, startAbs, duration)
 }
 
-func (r *Runner) probeInternalTextSpans(startAbs, duration float64) ([]SubtitleSpan, error) {
+func (r *Runner) probeInternalTextSpans(startAbs, duration float64) ([]runtime.SubtitleSpan, error) {
 	args := []string{
 		"-probesize", r.Settings.ProbeSize,
 		"-analyzeduration", r.Settings.Analyze,
@@ -250,7 +250,7 @@ func (r *Runner) probeInternalTextSpans(startAbs, duration float64) ([]SubtitleS
 		"-select_streams", fmt.Sprintf("s:%d", r.selection().RelativeIndex),
 	}
 	if startAbs >= 0 {
-		args = append(args, "-read_intervals", timestamps.ReadInterval(startAbs, duration))
+		args = append(args, "-read_intervals", timestamps.SecToHMS(startAbs)+"+"+timestamps.SecToHMS(duration))
 	}
 	args = append(args,
 		"-show_packets",
@@ -261,10 +261,10 @@ func (r *Runner) probeInternalTextSpans(startAbs, duration float64) ([]SubtitleS
 	return r.ProbePacketSpans(args, true, -1, startAbs, duration)
 }
 
-func (r *Runner) probeExternalTextSpans(start, duration float64) ([]SubtitleSpan, error) {
+func (r *Runner) probeExternalTextSpans(start, duration float64) ([]runtime.SubtitleSpan, error) {
 	args := []string{"-v", "error"}
 	if start >= 0 {
-		args = append(args, "-read_intervals", timestamps.ReadInterval(start, duration))
+		args = append(args, "-read_intervals", timestamps.SecToHMS(start)+"+"+timestamps.SecToHMS(duration))
 	}
 	args = append(args,
 		"-show_packets",
@@ -275,8 +275,8 @@ func (r *Runner) probeExternalTextSpans(start, duration float64) ([]SubtitleSpan
 	return r.ProbePacketSpans(args, false, -1, start, duration)
 }
 
-func (r *Runner) ProbePacketSpans(args []string, internal bool, bitmapMinSize int, startAbs, duration float64) ([]SubtitleSpan, error) {
-	spans := make([]SubtitleSpan, 0, 256)
+func (r *Runner) ProbePacketSpans(args []string, internal bool, bitmapMinSize int, startAbs, duration float64) ([]runtime.SubtitleSpan, error) {
+	spans := make([]runtime.SubtitleSpan, 0, 256)
 	progress := newIndexProgressEmitter(r, internal, startAbs, duration)
 
 	stdout, stderr, err := system.RunCommandLive(r.Ctx, r.Tools.FFprobeBin, func(stream, line string) {
@@ -288,7 +288,7 @@ func (r *Runner) ProbePacketSpans(args []string, internal bool, bitmapMinSize in
 			return
 		}
 		progress.observe(packet)
-		spans = appendPacketSpan(spans, packet, internal, bitmapMinSize, r.media().StartOffset)
+		spans = appendPacketSpan(spans, packet, internal, bitmapMinSize, r.media.StartOffset)
 	}, args...)
 	if err != nil {
 		return nil, fmt.Errorf("%v", system.BestErrorMessage(err, stderr, stdout))
@@ -309,7 +309,7 @@ func (r *Runner) ProbePacketSpans(args []string, internal bool, bitmapMinSize in
 	return spans, nil
 }
 
-func appendPacketSpan(spans []SubtitleSpan, packet FFprobePacket, internal bool, bitmapMinSize int, startOffset float64) []SubtitleSpan {
+func appendPacketSpan(spans []runtime.SubtitleSpan, packet runtime.FFprobePacket, internal bool, bitmapMinSize int, startOffset float64) []runtime.SubtitleSpan {
 	pts, ok := parseFloatString(packet.PTSTime)
 	if !ok {
 		return spans
@@ -337,7 +337,7 @@ func appendPacketSpan(spans []SubtitleSpan, packet FFprobePacket, internal bool,
 	if start < 0 {
 		start = 0
 	}
-	return append(spans, SubtitleSpan{Start: start, End: end})
+	return append(spans, runtime.SubtitleSpan{Start: start, End: end})
 }
 
 func IndexScanProgressPercent(scanned, total float64) float64 {
@@ -375,24 +375,24 @@ func IndexScanProgressDetail(detail string, scanned, total float64) string {
 	return fmt.Sprintf("%s | 已扫描 %s / %s", base, timestamps.SecToHMS(scanned), timestamps.SecToHMS(total))
 }
 
-func ParseFFprobePacketCompactLine(line string) (FFprobePacket, bool) {
+func ParseFFprobePacketCompactLine(line string) (runtime.FFprobePacket, bool) {
 	text := strings.TrimSpace(line)
 	if text == "" {
-		return FFprobePacket{}, false
+		return runtime.FFprobePacket{}, false
 	}
 
 	fields := strings.Split(text, "|")
 	if len(fields) == 0 {
-		return FFprobePacket{}, false
+		return runtime.FFprobePacket{}, false
 	}
 	if strings.EqualFold(strings.TrimSpace(fields[0]), "packet") {
 		fields = fields[1:]
 	}
 	if len(fields) == 0 {
-		return FFprobePacket{}, false
+		return runtime.FFprobePacket{}, false
 	}
 
-	packet := FFprobePacket{}
+	packet := runtime.FFprobePacket{}
 	if !strings.Contains(fields[0], "=") {
 		packet.PTSTime = strings.TrimSpace(fields[0])
 		if len(fields) > 1 {
@@ -420,7 +420,7 @@ func ParseFFprobePacketCompactLine(line string) (FFprobePacket, bool) {
 	}
 
 	if packet.PTSTime == "" && packet.DurationTime == "" && packet.Size == "" {
-		return FFprobePacket{}, false
+		return runtime.FFprobePacket{}, false
 	}
 	return packet, true
 }
@@ -449,19 +449,12 @@ func parseIntString(value string) (int, bool) {
 	return parsed, true
 }
 
-func minFloat(left, right float64) float64 {
-	if left < right {
-		return left
-	}
-	return right
-}
-
-func MergeNearbySpans(spans []SubtitleSpan, maxGap float64) []SubtitleSpan {
+func MergeNearbySpans(spans []runtime.SubtitleSpan, maxGap float64) []runtime.SubtitleSpan {
 	if len(spans) <= 1 {
 		return spans
 	}
 
-	sorted := make([]SubtitleSpan, len(spans))
+	sorted := make([]runtime.SubtitleSpan, len(spans))
 	copy(sorted, spans)
 	sort.Slice(sorted, func(i, j int) bool {
 		if sorted[i].Start == sorted[j].Start {
@@ -470,7 +463,7 @@ func MergeNearbySpans(spans []SubtitleSpan, maxGap float64) []SubtitleSpan {
 		return sorted[i].Start < sorted[j].Start
 	})
 
-	result := make([]SubtitleSpan, 0, len(sorted))
+	result := make([]runtime.SubtitleSpan, 0, len(sorted))
 	current := sorted[0]
 
 	for i := 1; i < len(sorted); i++ {
@@ -487,7 +480,7 @@ func MergeNearbySpans(spans []SubtitleSpan, maxGap float64) []SubtitleSpan {
 	return result
 }
 
-func SnapFromIndex(requested float64, index []SubtitleSpan, epsilon float64) (float64, bool) {
+func SnapFromIndex(requested float64, index []runtime.SubtitleSpan, epsilon float64) (float64, bool) {
 	if len(index) == 0 {
 		return 0, false
 	}
@@ -514,6 +507,6 @@ func SnapFromIndex(requested float64, index []SubtitleSpan, epsilon float64) (fl
 	return BitmapSnapPoint(index[best], epsilon), true
 }
 
-func BitmapSnapPoint(span SubtitleSpan, epsilon float64) float64 {
+func BitmapSnapPoint(span runtime.SubtitleSpan, epsilon float64) float64 {
 	return span.Start + math.Min((span.End-span.Start)/2, epsilon/2)
 }
