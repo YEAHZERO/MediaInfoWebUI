@@ -208,7 +208,7 @@ docker run -d --name mediainfo --privileged --network host \
 | 环境变量 | 默认值 | 说明 |
 |---------|--------|------|
 | `PORT` | `28888` | 服务端口 |
-| `TZ` | `UTC` | 时区 |
+| `TZ` | `Asia/Shanghai` | 时区 |
 | `REQUEST_TIMEOUT` | `20m` | 请求超时（大文件建议 `30m`） |
 | `ENGINE_TYPE` | `script` | 截图引擎：`script`（脚本引擎）或 `native`（原生引擎） |
 | `ENABLE_NATIVE_ENGINE` | `0` | 启用原生截图引擎（等价 `ENGINE_TYPE=native`） |
