@@ -109,7 +109,7 @@ ENV ENGINE_TYPE=script
 ENTRYPOINT ["/usr/local/bin/mediainfo"]
 
 # ============================================
-# Stage: 标准版镜像（含 mkvtoolnix，脚本引擎）
+# Stage: 标准版镜像（无 mkvtoolnix，脚本引擎）
 # ============================================
 FROM alpine:${ALPINE_VERSION} AS runtime-standard
 ARG ALPINE_EDGE_REPO
@@ -120,7 +120,6 @@ RUN set -eux; \
         ca-certificates \
         mediainfo \
         ffmpeg \
-        mkvtoolnix \
         p7zip \
         udftools \
         kmod \
@@ -151,7 +150,6 @@ RUN set -eux; \
         ca-certificates \
         mediainfo \
         ffmpeg \
-        mkvtoolnix \
         p7zip \
         udftools \
         kmod \

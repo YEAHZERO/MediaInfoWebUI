@@ -4,59 +4,10 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 
 	screenshotruntime "mediainfo/internal/screenshot/runtime"
 )
-
-type SubtitleState struct {
-	Index                    []screenshotruntime.SubtitleSpan
-	IndexBuilt               bool
-	RejectedBitmapCandidates map[string]struct{}
-	BitmapRenderBackOverride int
-}
-
-type SubtitleSelection struct {
-	Mode           string
-	File           string
-	RelativeIndex  int
-	ExtractedText  bool
-	SelectedCodec  string
-}
-
-type Runner struct {
-	Ctx            context.Context
-	SourcePath     string
-	Tools          struct{
-		FFprobeBin  string
-		FFmpegBin   string
-	}
-	Settings         struct{
-		ProbeSize      string
-		Analyze        string
-		CoarseBackPGS  int
-	}
-	subtitle      SubtitleSelection
-	media         struct{
-		Duration      float64
-		StartOffset   float64
-	}
-	subtitleState SubtitleState
-	logf          func(string, ...any)
-	logProgress   func(string, int, int, string)
-	logProgressPercent func(string, float64, string)
-	startHeartbeat func(string, string) func()
-	renderCoarseBack func() int
-	isSupportedBitmapSubtitle func() bool
-	isPGSSubtitle func() bool
-	isDVDSubtitle func() bool
-	bitmapSubtitleVisibleAt func(float64) (bool, error)
-	internalBitmapSubtitleVisibleAtWithCoarseBack func(float64, int) (bool, error)
-	logBitmapSubtitleVisibilityProgress func()
-	ensureSubtitleIndex func() []screenshotruntime.SubtitleSpan
-	selection func() SubtitleSelection
-	state func() *SubtitleState
-	mediaInfo func() struct{Duration float64;StartOffset float64}
-}
 
 func BitmapCandidateKey(t float64) string {
 	return fmt.Sprintf("%.3f", math.Round(t*1000)/1000)
@@ -76,4 +27,107 @@ func DetectSubtitleRelativeIndex(ctx context.Context, ffprobe, sourcePath string
 		return -1
 	}
 	return GetRelativeIndex(ctx, ffprobe, sourcePath, best.CodecName)
+}
+
+func HelperNeedsFFprobe(raw []screenshotruntime.SubtitleTrack, helper []screenshotruntime.BlurayHelperTrack) bool {
+	if len(helper) == 0 {
+		return true
+	}
+
+	helperByPID := make(map[int]screenshotruntime.BlurayHelperTrack, len(helper))
+	for _, track := range helper {
+		helperByPID[track.PID] = track
+	}
+
+	for index, track := range raw {
+		helperMeta := screenshotruntime.BlurayHelperTrack{}
+		helperMetaOK := false
+		if pid, ok := NormalizeStreamPID(track.StreamID); ok {
+			if meta, exists := helperByPID[pid]; exists {
+				helperMeta = meta
+				helperMetaOK = true
+			}
+		}
+		if !helperMetaOK && len(helper) == len(raw) && index < len(helper) {
+			helperMeta = helper[index]
+			helperMetaOK = true
+		}
+		if !helperMetaOK {
+			return true
+		}
+		if NeedsBluraySupplement(helperMeta.Lang, "") {
+			return true
+		}
+	}
+
+	return false
+}
+
+func HelperHasPayloadBytes(result screenshotruntime.BlurayHelperResult) bool {
+	return result.BitrateScanned || result.BitrateMode == "payload-bytes" || result.BitrateMode == "sampled-payload-bytes"
+}
+
+func HelperNeedsPayloadScan(raw []screenshotruntime.SubtitleTrack, helperResult screenshotruntime.BlurayHelperResult, helper []screenshotruntime.BlurayHelperTrack, bluray []screenshotruntime.SubtitleTrack, blurayMode string) bool {
+	if HelperHasPayloadBytes(helperResult) || len(helper) == 0 {
+		return false
+	}
+
+	helperByPID := make(map[int]screenshotruntime.BlurayHelperTrack, len(helper))
+	for _, track := range helper {
+		helperByPID[track.PID] = track
+	}
+
+	langCounts := make(map[string]int, 4)
+	for index, track := range raw {
+		if BitmapKindFromCodec(track.Codec) != screenshotruntime.BitmapSubtitlePGS {
+			continue
+		}
+
+		langForPick := track.Language
+		titleForPick := track.Title
+		helperMetaOK := false
+
+		if pid, ok := NormalizeStreamPID(track.StreamID); ok {
+			if meta, exists := helperByPID[pid]; exists {
+				helperMetaOK = true
+				if strings.TrimSpace(meta.Lang) != "" {
+					langForPick = strings.ToLower(strings.TrimSpace(meta.Lang))
+				}
+			}
+		}
+		if !helperMetaOK && len(helper) == len(raw) && index < len(helper) {
+			helperMetaOK = true
+			if strings.TrimSpace(helper[index].Lang) != "" {
+				langForPick = strings.ToLower(strings.TrimSpace(helper[index].Lang))
+			}
+		}
+		if !helperMetaOK {
+			continue
+		}
+
+		if (blurayMode == "ffprobe" || blurayMode == "helper+ffprobe") && index < len(bluray) {
+			needsSupplement := blurayMode == "ffprobe" || NeedsBluraySupplement(langForPick, titleForPick)
+			if needsSupplement {
+				if bluray[index].Language != "" && bluray[index].Language != "unknown" {
+					langForPick = bluray[index].Language
+				}
+				if bluray[index].Title != "" {
+					titleForPick = bluray[index].Title
+				}
+			} else if strings.TrimSpace(titleForPick) == "" && bluray[index].Title != "" {
+				titleForPick = bluray[index].Title
+			}
+		}
+
+		langClass := ClassifyLanguage(strings.TrimSpace(langForPick + " " + titleForPick))
+		if langClass == "" {
+			continue
+		}
+		langCounts[langClass]++
+		if langCounts[langClass] > 1 {
+			return true
+		}
+	}
+
+	return false
 }

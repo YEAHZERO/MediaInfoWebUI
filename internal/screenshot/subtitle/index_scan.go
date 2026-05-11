@@ -79,7 +79,7 @@ func (r *Runner) ShouldEmitIndexProgress() bool {
 }
 
 func (r *Runner) canApproximateIndexScanProgress() bool {
-	return r != nil && r.media.Duration > 0
+	return r != nil && r.Media != nil && r.Media.Duration > 0
 }
 
 func (r *Runner) indexProgressDetail() string {
@@ -139,11 +139,11 @@ func newIndexProgressEmitter(r *Runner, internal bool, startAbs, duration float6
 
 	scanStart := 0.0
 	if internal {
-		scanStart = math.Max(r.media.StartOffset, 0)
+		scanStart = math.Max(r.Media.StartOffset, 0)
 	}
 	emitter.baseDetail = r.indexProgressDetail()
 	emitter.scanStart = scanStart
-	emitter.scanTotal = r.media.Duration
+	emitter.scanTotal = r.Media.Duration
 	emitter.maxPTS = scanStart
 	emitter.enabled = emitter.scanTotal > 0
 	return emitter
@@ -288,7 +288,7 @@ func (r *Runner) ProbePacketSpans(args []string, internal bool, bitmapMinSize in
 			return
 		}
 		progress.observe(packet)
-		spans = appendPacketSpan(spans, packet, internal, bitmapMinSize, r.media.StartOffset)
+		spans = appendPacketSpan(spans, packet, internal, bitmapMinSize, r.Media.StartOffset)
 	}, args...)
 	if err != nil {
 		return nil, fmt.Errorf("%v", system.BestErrorMessage(err, stderr, stdout))

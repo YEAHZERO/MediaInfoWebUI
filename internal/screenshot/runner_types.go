@@ -1,0 +1,28 @@
+package screenshot
+
+import (
+	"context"
+
+	screenshotruntime "mediainfo/internal/screenshot/runtime"
+)
+
+type screenshotRunner struct {
+	ctx              context.Context
+	sourcePath       string
+	dvdMediaInfoPath string
+	outputDir        string
+	variant          string
+	subtitleMode     string
+	requested        []float64
+	settings         screenshotruntime.VariantSettings
+	tools            screenshotruntime.Toolchain
+	logger           screenshotruntime.Logger
+	lossyPNGFiles    map[string]struct{}
+	media            screenshotruntime.MediaState
+	render           screenshotruntime.RenderState
+	subtitleState    screenshotruntime.SubtitleState
+
+	subtitle screenshotruntime.SubtitleSelection
+
+	activeShot screenshotruntime.ActiveShot
+}
