@@ -18,7 +18,10 @@ const (
 	screenshotJobStatusFailed    = "failed"
 	screenshotJobStatusCanceled  = "canceled"
 	screenshotJobTTL             = 30 * time.Minute
+	maxScreenshotJobSlots        = 4
 )
+
+var screenshotJobSem = make(chan struct{}, maxScreenshotJobSlots)
 
 var screenshotJobs = struct {
 	mu    sync.Mutex

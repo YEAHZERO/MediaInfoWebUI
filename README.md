@@ -3,7 +3,7 @@
 > 基于 [minfo](https://github.com/mirrorb/minfo) 改进的本地媒体信息检测 Web 工具
 
 [![Docker Pulls](https://img.shields.io/badge/Docker-GHCR-blue)](https://github.com/YEAHZERO/MediaInfoWebUI/pkgs/container/mediainfowebui)
-[![Version](https://img.shields.io/badge/version-1.5.0-green)](https://github.com/YEAHZERO/MediaInfoWebUI/releases/tag/v1.5.0)
+[![Version](https://img.shields.io/badge/version-1.5.1-green)](https://github.com/YEAHZERO/MediaInfoWebUI/releases/tag/v1.5.1)
 
 ## 目录
 
@@ -217,6 +217,7 @@ docker run -d --name mediainfo --privileged --network host \
 | `OXIPNG_BIN` | `oxipng` | oxipng 路径 |
 | `PNGQUANT_BIN` | `pngquant` | pngquant 路径 |
 | `MEDIAINFO_BIN` | `/usr/bin/mediainfo` | MediaInfo CLI 路径 |
+| `MKVMERGE_BIN` | `mkvmerge` | mkvmerge 路径（默认从 PATH 查找） |
 
 ***
 
@@ -476,6 +477,19 @@ docker inspect mediainfo | grep Privileged
 ***
 
 ## 更新日志
+
+### [1.5.1] - 2026-05-11
+
+**修复**
+
+- **字幕对齐校准**：`alignToSubtitle` 此前为空操作（直接返回请求值），现已连接 `SnapFromIndex` 全片字幕索引，PGS/DVD 位图字幕使用 `SearchBack`（6s），文本字幕使用 2s epsilon 进行最近字幕对齐
+- **DVD 截图 IFO→VOB 链路**：`captureScreenshot` 此前始终使用原始输入路径，现检测 `DVDResult.SelectedVOBPath` 并自动切换为 VOB 文件路径，完成 IFO→VOB 完整数据链路
+- **Job 并发控制**：新增 `maxScreenshotJobSlots=4` 基于 channel semaphore 的并发限制，防止无限 goroutine 创建
+
+**优化**
+
+- libplacebo 回退机制验证完毕：`captureWithLibplaceboFallback` 崩溃检测 + `buildFallbackToneMappingFilter` 自动回退，覆盖 HDR10/HLG/Dolby Vision
+- 截图字幕对齐新增日志输出：`[信息] 字幕对齐: 请求 X.XXs → 对齐到字幕 X.XXs`
 
 ### [1.5.0] - 2026-05-11
 

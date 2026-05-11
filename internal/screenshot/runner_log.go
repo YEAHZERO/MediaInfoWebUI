@@ -9,6 +9,7 @@ import (
 
 	"mediainfo/internal/screenshot/engine"
 	screenshotprogress "mediainfo/internal/screenshot/progress"
+	screenshotsubtitle "mediainfo/internal/screenshot/subtitle"
 	"mediainfo/internal/screenshot/taskprogress"
 )
 
@@ -87,6 +88,17 @@ func (r *screenshotRunner) isSupportedBitmapSubtitle() bool {
 }
 
 func (r *screenshotRunner) alignToSubtitle(requested float64) float64 {
+	if !r.subtitleState.IndexBuilt || len(r.subtitleState.Index) == 0 {
+		return requested
+	}
+	epsilon := 2.0
+	if r.subtitle.Codec == "hdmv_pgs_subtitle" || r.subtitle.Codec == "dvd_subtitle" {
+		epsilon = r.settings.SearchBack
+	}
+	if snapped, ok := screenshotsubtitle.SnapFromIndex(requested, r.subtitleState.Index, epsilon); ok {
+		r.logf("[信息] 字幕对齐: 请求 %.3fs → 对齐到字幕 %.3fs", requested, snapped)
+		return snapped
+	}
 	return requested
 }
 
@@ -115,8 +127,13 @@ func (r *screenshotRunner) resolveUniqueScreenshotSecond(requested, aligned floa
 }
 
 func (r *screenshotRunner) captureScreenshot(aligned float64, outputPath string) error {
+	sourcePath := r.sourcePath
+	if r.subtitleState.DVDResult != nil && r.subtitleState.DVDResult.SelectedVOBPath != "" {
+		sourcePath = r.subtitleState.DVDResult.SelectedVOBPath
+		r.logf("[调试] DVD 截图使用 VOB 路径: %s", sourcePath)
+	}
 	_, err := defaultEngine.Capture(r.ctx, engine.CaptureOptions{
-		SourcePath:   r.sourcePath,
+		SourcePath:   sourcePath,
 		OutputDir:    outputPath,
 		Variant:      r.variant,
 		SubtitleMode: r.subtitleMode,

@@ -12,7 +12,9 @@ import (
 )
 
 func (j *screenshotJob) run() {
+	screenshotJobSem <- struct{}{}
 	defer func() {
+		<-screenshotJobSem
 		if j.cancel != nil {
 			j.cancel()
 		}
