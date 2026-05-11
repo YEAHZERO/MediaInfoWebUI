@@ -3,7 +3,7 @@
 > 基于 [minfo](https://github.com/mirrorb/minfo) 改进的本地媒体信息检测 Web 工具
 
 [![Docker Pulls](https://img.shields.io/badge/Docker-GHCR-blue)](https://github.com/YEAHZERO/MediaInfoWebUI/pkgs/container/mediainfowebui)
-[![Version](https://img.shields.io/badge/version-1.5.1-green)](https://github.com/YEAHZERO/MediaInfoWebUI/releases/tag/v1.5.1)
+[![Version](https://img.shields.io/badge/version-1.5.2-green)](https://github.com/YEAHZERO/MediaInfoWebUI/releases/tag/v1.5.2)
 
 ## 目录
 
@@ -478,12 +478,19 @@ docker inspect mediainfo | grep Privileged
 
 ## 更新日志
 
-### [1.5.1] - 2026-05-11
+### [1.5.2] - 2026-05-12
+
+**文档优化**
+
+- 更新日志优化：去除重复内容，明确说明 v1.5 前的功能记录与实际完整实现的区别
+- 版本号同步至 v1.5.2
+
+### [1.5.1] - 2026-05-12
 
 **修复**
 
-- **字幕对齐校准**：`alignToSubtitle` 此前为空操作（直接返回请求值），现已连接 `SnapFromIndex` 全片字幕索引，PGS/DVD 位图字幕使用 `SearchBack`（6s），文本字幕使用 2s epsilon 进行最近字幕对齐
-- **DVD 截图 IFO→VOB 链路**：`captureScreenshot` 此前始终使用原始输入路径，现检测 `DVDResult.SelectedVOBPath` 并自动切换为 VOB 文件路径，完成 IFO→VOB 完整数据链路
+- **字幕对齐校准（完整实现）**：`alignToSubtitle` 此前为空操作（直接返回请求值），现已连接 `SnapFromIndex` 全片字幕索引，PGS/DVD 位图字幕使用 `SearchBack`（6s），文本字幕使用 2s epsilon 进行最近字幕对齐
+- **DVD 截图 IFO→VOB 链路（完整实现）**：`captureScreenshot` 此前始终使用原始输入路径，现检测 `DVDResult.SelectedVOBPath` 并自动切换为 VOB 文件路径，完成 IFO→VOB 完整数据链路
 - **Job 并发控制**：新增 `maxScreenshotJobSlots=4` 基于 channel semaphore 的并发限制，防止无限 goroutine 创建
 
 **优化**
@@ -534,16 +541,9 @@ docker inspect mediainfo | grep Privileged
 
 ### [1.4.3] - 2026-05-11
 
-**新增 - 6 大核心功能升级**
+> 注：此版本列出的多项功能（字幕对齐、DVD 完整解析、PGS 字幕探测）在 **v1.5.0/v1.5.1** 才真正完整实现
 
-- **RunCommandLive 实时进度回调**：BDInfo 扫描支持实时进度推送
-- **虚拟 ISO 路径支持**：`ISO:/path!/inner` 格式解析与挂载
-- **更全面的 DVD 解析**：标题集选择、IFO/VOB 路径推导
-- **PGS 字幕逐个探测 + 可见性检测**：完整字幕索引扫描管道
-- **字幕对齐校准**：截图时间自动对齐最近字幕 + 唯一秒去重
-- **SelectLargestPlaylistBlock**：自动选择最大 Playlist 块
-
-**优化**
+**变更记录**
 
 - Dockerfile 参考 minfo 结构重构，增加 BDInfo 构建
 - 多阶段构建优化，减小最终镜像体积

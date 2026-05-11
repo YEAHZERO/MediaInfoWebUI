@@ -92,6 +92,7 @@
             :copy-output-label="copyOutputLabel"
             :output-text="outputText"
             :status-message="statusMessage"
+            :task-progress="taskProgress"
             @copy="copyOutputText"
             @clear="clearOutputText"
         />
@@ -103,6 +104,7 @@
             :copy-b-b-code-label="copyBBCodeLabel"
             :link-status-text="linkStatusText"
             :link-items="linkItems"
+            :task-progress="taskProgress"
             @append-links="appendShotLinks"
             @copy-links="copyLinks"
             @copy-bbcode="copyBBCode"
@@ -170,6 +172,7 @@ const {
     statusMessage,
     showOutputPanel,
     showImageLinksPanel,
+    taskProgress,
     runInfo,
     downloadShots,
     outputShotLinks,

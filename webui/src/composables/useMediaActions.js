@@ -1,5 +1,5 @@
 import { computed, ref, watch } from "vue";
-import { prepareScreenshotZipDownload, requestInfo, requestScreenshotLinks, startPreparedDownload } from "../api/media";
+import { createScreenshotJob, fetchScreenshotJob, cancelScreenshotJob, prepareScreenshotZipDownload, requestInfo, requestScreenshotLinks, startPreparedDownload } from "../api/media";
 import { buildBBCodeText, buildCopyText, buildLinkText, copyText, extractDirectLinks, mergeOutputLinks } from "../utils/output";
 
 export function useMediaActions(path, screenshotVariant, screenshotCount, screenshotSubtitleMode, hasInput) {
@@ -14,6 +14,7 @@ export function useMediaActions(path, screenshotVariant, screenshotCount, screen
     const copyLinksStatus = ref("");
     const copyBBCodeStatus = ref("");
     const noticeText = ref("");
+    const taskProgress = ref(null);
     let noticeTimer = null;
     const copyOutputLabel = computed(() => copyOutputStatus.value || "复制输出");
     const copyLinksLabel = computed(() => copyLinksStatus.value || "复制链接");
@@ -25,6 +26,9 @@ export function useMediaActions(path, screenshotVariant, screenshotCount, screen
         busy.value = isBusy;
         activeAction.value = isBusy ? action : "";
         statusMessage.value = isBusy ? label || "" : "";
+        if (!isBusy) {
+            taskProgress.value = null;
+        }
     };
 
     const setOutputText = (text) => {
@@ -35,27 +39,40 @@ export function useMediaActions(path, screenshotVariant, screenshotCount, screen
         linkStatusText.value = typeof text === "string" ? text : "";
     };
 
+    const setTaskProgress = (progress) => {
+        taskProgress.value = normalizeTaskProgressPayload(progress);
+    };
+
+    const clearTaskProgress = () => {
+        taskProgress.value = null;
+    };
+
     const clearOutputState = () => {
         setOutputText("");
+        clearTaskProgress();
     };
 
     const clearLinkState = () => {
         linkItems.value = [];
         setLinkStatusText("");
+        clearTaskProgress();
     };
 
     const hidePanels = () => {
         activePanel.value = "";
+        clearTaskProgress();
     };
 
     const activateOutputPanel = () => {
         activePanel.value = "output";
+        clearTaskProgress();
         clearLinkState();
         clearOutputState();
     };
 
     const activateImageLinksPanel = (clearLinks = true) => {
         activePanel.value = "links";
+        clearTaskProgress();
         clearOutputState();
         if (clearLinks) {
             clearLinkState();
@@ -122,28 +139,51 @@ export function useMediaActions(path, screenshotVariant, screenshotCount, screen
         }
         try {
             activateOutputPanel();
-            setBusy(true, "正在生成截图...", "download-shots");
-            const { downloadURL, logs, files } = await prepareScreenshotZipDownload(
+            setBusy(true, "截图任务已提交，等待执行...", "download-shots");
+            setTaskProgress(buildFallbackTaskProgress("pending", "等待开始", "截图任务已提交，等待执行。"));
+
+            const job = await createScreenshotJob(
                 path.value.trim(),
                 screenshotVariant.value,
                 screenshotSubtitleMode.value,
                 screenshotCount.value,
+                "zip"
             );
-            logScreenshotLogs("download", logs);
-            startPreparedDownload(downloadURL);
-            
-            const fileInfo = files.map(f => ({
-                name: f.name,
-                size: formatFileSize(f.size)
-            }));
-            const fileListText = fileInfo.map(f => `${f.name} (${f.size})`).join("\n");
-            setOutputText(`截图已生成。\n\n文件列表：\n${fileListText}`);
+
+            const result = await waitForScreenshotJob(job.jobId, (job) => {
+                if (job.status === "pending") {
+                    setBusy(true, "截图任务已提交，等待执行...", "download-shots");
+                    setTaskProgress(buildFallbackTaskProgress("pending", "等待开始", "截图任务已提交，等待执行。"));
+                } else if (job.status === "running") {
+                    setBusy(true, "正在生成截图...", "download-shots");
+                    setTaskProgress(resolveTaskProgress(job.progress, buildFallbackTaskProgress("running", "生成截图", "正在生成截图文件。")));
+                } else if (job.status === "succeeded") {
+                    setBusy(true, "截图已生成，正在下载...", "download-shots");
+                    setTaskProgress(buildFallbackTaskProgress("succeeded", "已完成", "截图已生成，正在下载。"));
+                }
+            });
+
+            logScreenshotLogs("download", result.logs);
+
+            if (typeof result.downloadURL !== "string" || result.downloadURL.trim() === "") {
+                throw buildAsyncJobError(result);
+            }
+
+            startPreparedDownload(new URL(result.downloadURL, window.location.origin).toString());
+            setOutputText("截图已生成。");
         } catch (err) {
             logScreenshotLogs("download failed", err?.logs, true);
+            if (err?.canceled) {
+                activateOutputPanel();
+                setOutputText("截图任务已取消。");
+                showNotice("截图任务已取消。");
+                return;
+            }
             clearOutputState();
             hidePanels();
-            showNotice(err?.message || "截图请求失败。");
+            showNotice(err?.message || "截图任务已失效，请重新发起。");
         } finally {
+            clearTaskProgress();
             setBusy(false);
         }
     };
@@ -163,12 +203,33 @@ export function useMediaActions(path, screenshotVariant, screenshotCount, screen
         }
         try {
             activateImageLinksPanel(true);
-            setBusy(true, "", "output-links");
-            setLinkStatusText("正在生成截图并上传...");
-            const data = await requestScreenshotLinks(path.value.trim(), screenshotVariant.value, screenshotSubtitleMode.value, screenshotCount.value);
-            logScreenshotLogs("upload", data.logs);
-            const output = data.output || "";
-            const links = extractDirectLinks(output);
+            setBusy(true, "截图任务已提交，等待执行...", "output-links");
+            setTaskProgress(buildFallbackTaskProgress("pending", "等待开始", "截图任务已提交，等待执行。"));
+
+            const job = await createScreenshotJob(
+                path.value.trim(),
+                screenshotVariant.value,
+                screenshotSubtitleMode.value,
+                screenshotCount.value,
+                "links"
+            );
+
+            const result = await waitForScreenshotJob(job.jobId, (job) => {
+                if (job.status === "pending") {
+                    setBusy(true, "截图任务已提交，等待执行...", "output-links");
+                    setTaskProgress(buildFallbackTaskProgress("pending", "等待开始", "截图任务已提交，等待执行。"));
+                } else if (job.status === "running") {
+                    setBusy(true, "正在生成截图并上传...", "output-links");
+                    setTaskProgress(resolveTaskProgress(job.progress, buildFallbackTaskProgress("running", "上传图床", "正在生成截图并上传图床。")));
+                } else if (job.status === "succeeded") {
+                    setBusy(true, "图床任务已完成...", "output-links");
+                    setTaskProgress(buildFallbackTaskProgress("succeeded", "已完成", "图床任务已完成。"));
+                }
+            });
+
+            logScreenshotLogs("upload", result.logs);
+
+            const links = extractDirectLinks(result.output || "");
 
             if (links.length > 0) {
                 const { items, addedCount, duplicateCount } = mergeOutputLinks([], links);
@@ -184,13 +245,20 @@ export function useMediaActions(path, screenshotVariant, screenshotCount, screen
                 return;
             }
 
-            setLinkStatusText(output || "没有返回图床链接。");
+            setLinkStatusText(result.output || "没有返回图床链接。");
         } catch (err) {
             logScreenshotLogs("upload failed", err?.logs, true);
+            if (err?.canceled) {
+                activateImageLinksPanel(true);
+                setLinkStatusText("图床任务已取消。");
+                showNotice("图床任务已取消。");
+                return;
+            }
             clearLinkState();
             hidePanels();
-            showNotice(err?.message || "图床链接请求失败。");
+            showNotice(err?.message || "图床任务已失效，请重新发起。");
         } finally {
+            clearTaskProgress();
             setBusy(false);
         }
     };
@@ -203,12 +271,33 @@ export function useMediaActions(path, screenshotVariant, screenshotCount, screen
         const previousStatusText = linkStatusText.value;
         try {
             activateImageLinksPanel(false);
-            setBusy(true);
-            setLinkStatusText("正在生成截图并上传...");
-            const data = await requestScreenshotLinks(path.value.trim(), screenshotVariant.value, screenshotSubtitleMode.value, screenshotCount.value);
-            logScreenshotLogs("upload", data.logs);
-            const output = data.output || "";
-            const links = extractDirectLinks(output);
+            setBusy(true, "截图任务已提交，等待执行...", "append-links");
+            setTaskProgress(buildFallbackTaskProgress("pending", "等待开始", "截图任务已提交，等待执行。"));
+
+            const job = await createScreenshotJob(
+                path.value.trim(),
+                screenshotVariant.value,
+                screenshotSubtitleMode.value,
+                screenshotCount.value,
+                "links"
+            );
+
+            const result = await waitForScreenshotJob(job.jobId, (job) => {
+                if (job.status === "pending") {
+                    setBusy(true, "截图任务已提交，等待执行...", "append-links");
+                    setTaskProgress(buildFallbackTaskProgress("pending", "等待开始", "截图任务已提交，等待执行。"));
+                } else if (job.status === "running") {
+                    setBusy(true, "正在生成截图并上传...", "append-links");
+                    setTaskProgress(resolveTaskProgress(job.progress, buildFallbackTaskProgress("running", "上传图床", "正在生成截图并上传图床。")));
+                } else if (job.status === "succeeded") {
+                    setBusy(true, "图床任务已完成...", "append-links");
+                    setTaskProgress(buildFallbackTaskProgress("succeeded", "已完成", "图床任务已完成。"));
+                }
+            });
+
+            logScreenshotLogs("upload", result.logs);
+
+            const links = extractDirectLinks(result.output || "");
 
             if (links.length > 0) {
                 const { items, addedCount, duplicateCount } = mergeOutputLinks(linkItems.value, links);
@@ -224,12 +313,19 @@ export function useMediaActions(path, screenshotVariant, screenshotCount, screen
                 return;
             }
 
-            setLinkStatusText(output || "没有返回图床链接。");
+            setLinkStatusText(result.output || "没有返回图床链接。");
         } catch (err) {
             logScreenshotLogs("upload failed", err?.logs, true);
+            if (err?.canceled) {
+                activateImageLinksPanel(false);
+                setLinkStatusText("图床任务已取消。");
+                showNotice("图床任务已取消。");
+                return;
+            }
             setLinkStatusText(previousStatusText);
-            showNotice(err?.message || "图床链接请求失败。");
+            showNotice(err?.message || "图床任务已失效，请重新发起。");
         } finally {
+            clearTaskProgress();
             setBusy(false);
         }
     };
@@ -342,6 +438,7 @@ export function useMediaActions(path, screenshotVariant, screenshotCount, screen
         statusMessage,
         showOutputPanel,
         showImageLinksPanel,
+        taskProgress,
         runInfo,
         downloadShots,
         outputShotLinks,
@@ -357,4 +454,99 @@ export function useMediaActions(path, screenshotVariant, screenshotCount, screen
 
 function normalizeTargetPath(value) {
     return typeof value === "string" ? value.trim() : "";
+}
+
+function isTerminalTaskStatus(status) {
+    return status === "succeeded" || status === "failed" || status === "canceled";
+}
+
+async function waitForScreenshotJob(jobId, onProgress) {
+    let lastLogCount = 0;
+
+    for (;;) {
+        const job = await fetchScreenshotJob(jobId);
+
+        if (typeof onProgress === "function") {
+            onProgress(job);
+        }
+
+        switch (job.status) {
+            case "pending":
+            case "running":
+                await sleep(1000);
+                continue;
+            case "succeeded":
+                return job;
+            case "canceled":
+                const canceledError = buildAsyncJobError(job);
+                canceledError.canceled = true;
+                throw canceledError;
+            case "failed":
+                throw buildAsyncJobError(job);
+            default:
+                throw buildAsyncJobError({ error: `未知任务状态：${job.status || "unknown"}`, logs: job.logs });
+        }
+    }
+}
+
+function buildAsyncJobError(job = {}) {
+    const canceled = job?.status === "canceled";
+    const error = new Error(job?.error || (canceled ? "任务已取消。" : "任务失败。"));
+    error.canceled = canceled;
+    error.logs = typeof job?.logs === "string" ? job.logs : "";
+    return error;
+}
+
+function sleep(ms) {
+    return new Promise((resolve) => {
+        setTimeout(resolve, ms);
+    });
+}
+
+function resolveTaskProgress(progress, fallback) {
+    return normalizeTaskProgressPayload(progress) || normalizeTaskProgressPayload(fallback);
+}
+
+function buildFallbackTaskProgress(status, runningStage, runningDetail) {
+    switch (status) {
+        case "succeeded":
+            return { percent: 100, stage: "已完成", detail: "任务执行完成。", indeterminate: false };
+        case "failed":
+            return { percent: 100, stage: "已失败", detail: "任务执行失败。", indeterminate: false };
+        case "canceled":
+            return { percent: 100, stage: "已取消", detail: "任务已取消。", indeterminate: false };
+        case "canceling":
+            return { percent: 94, stage: "正在停止", detail: "任务取消中...", indeterminate: true };
+        case "running":
+            return { percent: 12, stage: runningStage, detail: runningDetail, indeterminate: true };
+        case "pending":
+        default:
+            return { percent: 6, stage: "等待开始", detail: "任务已提交，等待执行。", indeterminate: true };
+    }
+}
+
+function normalizeTaskProgressPayload(progress) {
+    if (!progress || typeof progress !== "object") {
+        return null;
+    }
+
+    const percent = Number.isFinite(progress.percent) ? Math.min(100, Math.max(0, Number(progress.percent))) : 0;
+    const stage = typeof progress.stage === "string" ? progress.stage : "";
+    const detail = typeof progress.detail === "string" ? progress.detail : "";
+    const current = Number.isFinite(progress.current) && progress.current > 0 ? Math.round(progress.current) : 0;
+    const total = Number.isFinite(progress.total) && progress.total > 0 ? Math.round(progress.total) : 0;
+    const indeterminate = progress.indeterminate === true;
+
+    if (percent === 0 && stage === "" && detail === "" && current === 0 && total === 0 && !indeterminate) {
+        return null;
+    }
+
+    return {
+        percent,
+        stage,
+        detail,
+        current,
+        total,
+        indeterminate,
+    };
 }

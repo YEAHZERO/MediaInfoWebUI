@@ -52,6 +52,64 @@ export async function requestScreenshotLinks(path, variant, subtitleMode, count)
     return data;
 }
 
+export async function createScreenshotJob(path, variant, subtitleMode, count, mode) {
+    const response = await postForm("/api/screenshot-jobs", { path, mode, variant, subtitle_mode: subtitleMode, count });
+    const data = await safeReadJSON(response);
+    if (!response.ok || !data.ok || typeof data.job_id !== "string" || data.job_id.trim() === "") {
+        throw buildResponseError(data.error || "截图任务创建失败。", data);
+    }
+    return normalizeScreenshotJobPayload(data);
+}
+
+export async function fetchScreenshotJob(jobId) {
+    const response = await fetch(`/api/screenshot-jobs/${encodeURIComponent(jobId)}`, {
+        cache: "no-store",
+        headers: {
+            "Cache-Control": "no-store",
+        },
+    });
+    const data = await safeReadJSON(response);
+    if (!response.ok || !data.ok) {
+        throw buildResponseError(data.error || "截图任务状态读取失败。", data);
+    }
+    return normalizeScreenshotJobPayload(data);
+}
+
+export async function cancelScreenshotJob(jobId) {
+    const response = await fetch(`/api/screenshot-jobs/${encodeURIComponent(jobId)}`, {
+        method: "DELETE",
+        cache: "no-store",
+        headers: {
+            "Cache-Control": "no-store",
+        },
+    });
+    const data = await safeReadJSON(response);
+    if (!response.ok || !data.ok) {
+        throw buildResponseError(data.error || "截图任务取消失败。", data);
+    }
+    return normalizeScreenshotJobPayload(data);
+}
+
+function normalizeScreenshotJobPayload(data) {
+    return {
+        ok: data.ok === true,
+        jobId: typeof data.job_id === "string" ? data.job_id : "",
+        status: typeof data.status === "string" ? data.status : "",
+        mode: typeof data.mode === "string" ? data.mode : "",
+        output: typeof data.output === "string" ? data.output : "",
+        downloadURL: typeof data.download_url === "string" ? data.download_url : "",
+        error: typeof data.error === "string" ? data.error : "",
+        logs: typeof data.logs === "string" ? data.logs : "",
+        logEntries: Array.isArray(data.log_entries) ? data.log_entries : [],
+        progress: data.progress || null,
+        linkItems: Array.isArray(data.link_items) ? data.link_items : [],
+        pngLossyFiles: Array.isArray(data.png_lossy_files) ? data.png_lossy_files : [],
+        pngLossyIndexes: Array.isArray(data.png_lossy_indexes) ? data.png_lossy_indexes : [],
+        filename: typeof data.filename === "string" ? data.filename : "",
+        size: typeof data.size === "number" ? data.size : 0,
+    };
+}
+
 export async function fetchBDInfoPlaylists(path) {
     const response = await postForm("/api/bdinfo/playlists", { path });
     const data = await safeReadJSON(response);
