@@ -713,6 +713,16 @@ docker inspect mediainfo | grep Privileged
 
 ***
 
+## 感谢
+
+本项目基于 [minfo](https://github.com/mirrorb/minfo) 项目改进，在此特别感谢：
+
+- **mirrorb** - minfo 项目作者，提供了优秀的媒体信息检测框架
+- **BDInfoCLI** - 蓝光原盘信息检测工具
+- 所有为项目做出贡献的开发者和用户
+
+***
+
 ## 许可证
 
 本项目基于原 [minfo](https://github.com/mirrorb/minfo) 项目改进，采用相同的开源许可证。详见 [LICENSE](LICENSE) 文件。
