@@ -91,6 +91,14 @@ func (r *screenshotRunner) isSupportedBitmapSubtitle() bool {
 	return r.subtitle.Mode != "none" && (r.subtitle.Codec == "hdmv_pgs_subtitle" || r.subtitle.Codec == "dvd_subtitle")
 }
 
+func (r *screenshotRunner) isPGSSubtitle() bool {
+	return r.subtitle.Codec == "hdmv_pgs_subtitle"
+}
+
+func (r *screenshotRunner) isDVDSubtitle() bool {
+	return r.subtitle.Codec == "dvd_subtitle"
+}
+
 const subtitleSnapEpsilon = 0.50
 
 func (r *screenshotRunner) alignToSubtitle(requested float64) float64 {
