@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-VERSION="1.5.1"
+VERSION="1.5.4"
 REGISTRY="ghcr.io/yeahzero/mediainfowebui"
 PLATFORMS="linux/amd64"
 
@@ -31,12 +31,8 @@ echo ">>> Building light ..."
 build_and_push "light" "runtime-light"
 
 echo ""
-echo ">>> Building latest (standard) ..."
-build_and_push "latest" "runtime-standard"
-
-echo ""
-echo ">>> Building native ..."
-build_and_push "native" "runtime-native"
+echo ">>> Building latest (native, 推荐) ..."
+build_and_push "latest" "runtime-native"
 
 echo ""
 echo "================================================"
@@ -45,7 +41,6 @@ echo "================================================"
 echo ""
 echo "  ${REGISTRY}:light"
 echo "  ${REGISTRY}:latest"
-echo "  ${REGISTRY}:native"
 echo ""
 echo "  Version: v${VERSION}"
 echo "================================================"

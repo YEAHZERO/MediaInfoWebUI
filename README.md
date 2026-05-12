@@ -3,7 +3,7 @@
 > 基于 [minfo](https://github.com/mirrorb/minfo) 改进的本地媒体信息检测 Web 工具
 
 [![Docker Pulls](https://img.shields.io/badge/Docker-GHCR-blue)](https://github.com/YEAHZERO/MediaInfoWebUI/pkgs/container/mediainfowebui)
-[![Version](https://img.shields.io/badge/version-1.5.3-green)](https://github.com/YEAHZERO/MediaInfoWebUI/releases/tag/v1.5.3)
+[![Version](https://img.shields.io/badge/version-1.5.4-green)](https://github.com/YEAHZERO/MediaInfoWebUI/releases/tag/v1.5.3)
 
 ## 目录
 
@@ -117,11 +117,52 @@
 
 ### 镜像标签选择
 
-| 标签        | 描述      | 引擎        | 适用场景               |
-| --------- | ------- | --------- | ------------------ |
-| `:light`  | 轻量版     | 脚本引擎      | 仅基础 mediainfo + 截图 |
-| `:latest` | 标准版（推荐） | 脚本引擎      | 日常使用，功能完整          |
-| `:native` | 全功能版    | Native 引擎 | 需要 HDR 色调映射、高级字幕渲染 |
+| 标签        | 描述        | 引擎        | BDInfoCLI | HDR 映射 | PNG 优化 | 大小 (压缩) | 适用场景                 |
+| --------- | --------- | --------- | :-------: | :------: | :------: | ---------- | -------------------- |
+| `:light`  | 轻量版       | 脚本引擎      |   ❌ 需挂载   |    ❌    |    ❌    | ~80MB      | 基础 mediainfo + 截图，需自行提供 BDInfoCLI |
+| `:latest` | 全功能版（推荐） | Native 引擎 |   ✅ 内置    |    ✅    |    ✅    | ~100MB     | 完整功能，含 BDInfoCLI、HDR 映射、PNG 压缩 |
+
+### 镜像版本区别
+
+#### `:light`（轻量版）
+- **BDInfoCLI**：不包含，需用户自行挂载 `/opt/bdinfo/BDInfo`
+- **引擎**：脚本引擎，功能有限
+- **适用场景**：基础 mediainfo 查询和简单截图
+
+#### `:latest`（全功能版）
+- **BDInfoCLI**：内置完整的 BDInfoCLI（约 35MB）
+- **引擎**：Native 引擎，支持高级功能
+- **HDR 映射**：支持 HDR→SDR 色彩转换（libplacebo）
+- **PNG 优化**：支持 oxipng + pngquant 压缩
+- **适用场景**：完整功能体验，推荐使用
+
+### BDInfoCLI 说明
+
+**`:light` 版本使用 BDInfo**：
+
+```bash
+# 方式 1：挂载包含 BDInfoCLI 的目录
+docker run -d \
+  -v /path/to/your/bdinfo:/opt/bdinfo \
+  ghcr.io/yeahzero/mediainfowebui:light
+
+# 方式 2：设置环境变量指定路径
+docker run -d \
+  -e BDINFO_BIN=/custom/path/BDInfo \
+  -v /path/to/BDInfo:/custom/path/BDInfo \
+  ghcr.io/yeahzero/mediainfowebui:light
+```
+
+**获取 BDInfoCLI**：
+```bash
+mkdir -p /opt/bdinfo
+cd /opt/bdinfo
+curl -sSL https://github.com/mirrorb/BDInfoCLI/releases/latest/download/BDInfoCLI-linux-x64.zip -o bdinfo.zip
+unzip bdinfo.zip
+chmod +x BDInfo
+```
+
+> **镜像体积优化**：通过多阶段构建和文件清理，镜像体积已大幅减小。构建阶段（Go 编译器、Node.js 构建环境、.NET SDK）不进入最终镜像，仅保留运行时依赖。
 
 ### 一行命令部署
 
@@ -476,6 +517,33 @@ docker inspect mediainfo | grep Privileged
 ***
 
 ## 更新日志
+
+### [1.5.4] - 2026-05-12
+
+**新增 - BDInfoCLI 完整集成**
+
+- **native 版本**：内置完整 BDInfoCLI（从 mirrorb/BDInfoCLI 构建），无需额外挂载
+- **light 版本**：包含 `bdinfo.sh` 脚本，支持用户自行挂载 BDInfoCLI
+- **Dockerfile 优化**：参考 minfo 项目的 BDInfo 构建流程，使用 .NET 9 SDK 编译
+
+**新增 - 镜像体积优化**
+
+- 使用 `font-wqy-zenhei`（约 16MB）替代 `font-noto-cjk`（约 100MB），节省 ~84MB
+- 合并 RUN 指令减少镜像层数
+- 清理 `/var/cache/apk/*`、`/usr/share/doc`、`/usr/share/man`、`/usr/share/info`
+
+**文档更新**
+
+- 更新镜像标签选择表格，添加 BDInfoCLI、HDR 映射、PNG 优化列
+- 添加镜像版本区别说明
+- 添加 BDInfoCLI 使用说明
+
+**镜像大小**
+
+| 版本 | 压缩后 | 解压后 |
+|-----|-------|-------|
+| light | ~80MB | ~270MB |
+| latest (native) | ~100MB | ~340MB |
 
 ### [1.5.3] - 2026-05-12
 
