@@ -35,3 +35,18 @@ func DisplayProbeValue(value string) string {
 		return strings.TrimSpace(value)
 	}
 }
+
+func ScreenshotSecond(seconds float64) int {
+	return int(seconds)
+}
+
+func SecToHMSMS(seconds float64) string {
+	if seconds < 0 {
+		seconds = 0
+	}
+	h := int(seconds / 3600)
+	m := int((seconds - float64(h)*3600) / 60)
+	s := int(seconds) % 60
+	ms := int((seconds - float64(int(seconds))) * 1000)
+	return fmt.Sprintf("%02d:%02d:%02d.%03d", h, m, s, ms)
+}

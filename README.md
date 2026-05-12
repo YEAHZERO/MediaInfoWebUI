@@ -3,7 +3,7 @@
 > 基于 [minfo](https://github.com/mirrorb/minfo) 改进的本地媒体信息检测 Web 工具
 
 [![Docker Pulls](https://img.shields.io/badge/Docker-GHCR-blue)](https://github.com/YEAHZERO/MediaInfoWebUI/pkgs/container/mediainfowebui)
-[![Version](https://img.shields.io/badge/version-1.5.2-green)](https://github.com/YEAHZERO/MediaInfoWebUI/releases/tag/v1.5.2)
+[![Version](https://img.shields.io/badge/version-1.5.3-green)](https://github.com/YEAHZERO/MediaInfoWebUI/releases/tag/v1.5.3)
 
 ## 目录
 
@@ -58,7 +58,7 @@
 
 ### 字幕处理 🎬
 
-- 🎯 **字幕对齐校准**（v1.5.1 完整实现）：`SnapFromIndex` 全片字幕索引对齐，PGS/DVD 6s，文本 2s epsilon
+- 🎯 **字幕对齐校准**：`SnapFromIndex` 全片字幕索引对齐，PGS/DVD 6s，文本 2s epsilon
 - 🔍 **智能字幕选轨**：外挂字幕 → 内封字幕 → 无字幕三级降级，支持中英文优先级
 - 🗂️ **蓝光字幕选轨**：bdsub 二进制解析 MPLS/CLPI → ffprobe 联合探测 → payload/bitrate 密度排序
 - 🔄 **PGS 逐个段探测**：完整字幕索引扫描 + 可见性检测回溯
@@ -477,14 +477,46 @@ docker inspect mediainfo | grep Privileged
 
 ## 更新日志
 
-### \[1.5.2] - 2026-05-12
+### [1.5.3] - 2026-05-12
+
+**新增 - 字幕对齐校准功能完全移植**
+
+- **字幕对齐核心重构**：`alignToSubtitle` 完整实现，支持 PGS/DVD 位图字幕可见性检测 + 全片字幕索引对齐
+- **新增文件**：`capture_bitmap.go`（位图字幕探测与渲染）、`capture_filters.go`（滤镜链构建）
+- **核心函数移植**：
+  - `resolveUniqueScreenshotSecond` 完整实现，支持从字幕索引获取唯一时间点
+  - `uniqueAlignedCandidatesFromSubtitleIndex` 新增，按距离排序的字幕候选列表
+  - `acceptBitmapSubtitleCandidate` 新增，验证位图字幕可见性 + 回溯窗口调整
+  - `findNearestVisibleBitmapIndexedCandidate` 新增，搜索最近可见字幕
+  - `logAlignedSubtitleIndexCandidate` 新增，记录全片字幕索引命中结果
+- **工具函数新增**：`ScreenshotSecond`、`SecToHMSMS`、`floatDiffGT`
+- **字幕对齐精度**：epsilon 为 0.5s，支持位图字幕回溯窗口自动调整（short: renderBack → long: coarseBackPGS）
+
+**新增 - 截图实时进度显示**
+
+- **TaskProgressBar 组件**：从 minfo-master 移植，支持百分比、阶段、详情、计数显示
+- **异步任务轮询**：`waitForScreenshotJob` + `fetchScreenshotJob` + `createScreenshotJob`
+- **进度管理**：`setTaskProgress`、`clearTaskProgress`、`normalizeTaskProgressPayload`、`buildFallbackTaskProgress`
+- **UI 集成**：OutputPanel 和 ImageLinksPanel 均支持进度条显示
+
+**新增 - favicon 和 GitHub 链接**
+
+- **favicon.svg**：minfo 项目主题图标
+- **AppHeader 组件**：右上角 GitHub 链接图标 + 链接
+
+**变更 - Docker 镜像 mkvtoolnix 移除**
+
+- 所有镜像阶段（light/standard/native）均不再预安装 mkvtoolnix
+- 支持通过 `MKVMERGE_BIN` 环境变量自定义外部路径
+
+### [1.5.2] - 2026-05-12
 
 **文档优化**
 
 - 更新日志优化：去除重复内容，明确说明 v1.5 前的功能记录与实际完整实现的区别
 - 版本号同步至 v1.5.2
 
-### \[1.5.1] - 2026-05-12
+### [1.5.1] - 2026-05-12
 
 **修复**
 
