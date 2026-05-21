@@ -14,11 +14,12 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"mediainfo/internal/config"
 )
 
-const apiURL = "https://api.pixhost.to/images"
+const apiURL = "https://img2.pixhost.to/images"
 
 var thumbHostPattern = regexp.MustCompile(`^t([0-9]+)\.pixhost\.to$`)
 
@@ -32,6 +33,26 @@ func endpoint() string {
 }
 
 func uploadSingleImage(ctx context.Context, client *http.Client, apiURL, imagePath string) (string, error) {
+	var lastErr error
+	for attempt := 1; attempt <= 3; attempt++ {
+		if attempt > 1 {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(time.Duration(attempt) * time.Second):
+			}
+		}
+
+		directURL, err := doUpload(ctx, client, apiURL, imagePath)
+		if err == nil {
+			return directURL, nil
+		}
+		lastErr = err
+	}
+	return "", fmt.Errorf("上传失败（重试 3 次后）: %w", lastErr)
+}
+
+func doUpload(ctx context.Context, client *http.Client, apiURL, imagePath string) (string, error) {
 	file, err := os.Open(imagePath)
 	if err != nil {
 		return "", err
