@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"mediainfo/internal/media"
 	screenshotdvdinfo "mediainfo/internal/screenshot/dvdinfo"
 	screenshotprogress "mediainfo/internal/screenshot/progress"
 	screenshotruntime "mediainfo/internal/screenshot/runtime"
@@ -34,11 +35,25 @@ func runEngineScreenshotsWithLiveLogs(ctx context.Context, inputPath, outputDir,
 func resolveScreenshotSources(ctx context.Context, inputPath string, onLog LogHandler) resolvedScreenshotSources {
 	screenshotprogress.EmitStepLog(onLog, "启动", 1, 3, "正在解析截图输入源。")
 
-	return resolvedScreenshotSources{
-		sourcePath:       inputPath,
-		dvdMediaInfoPath: "",
-		cleanup:          func() {},
+	sourcePath, cleanup, err := resolveMediaSourcePath(ctx, inputPath)
+	if err != nil {
+		screenshotprogress.EmitStepLog(onLog, "启动", 1, 3, "解析输入源失败: "+err.Error())
+		return resolvedScreenshotSources{
+			sourcePath:       inputPath,
+			dvdMediaInfoPath: "",
+			cleanup:          func() {},
+		}
 	}
+
+	return resolvedScreenshotSources{
+		sourcePath:       sourcePath,
+		dvdMediaInfoPath: "",
+		cleanup:          cleanup,
+	}
+}
+
+func resolveMediaSourcePath(ctx context.Context, inputPath string) (string, func(), error) {
+	return media.ResolveScreenshotSource(ctx, inputPath)
 }
 
 func generateScreenshotTimestamps(ctx context.Context, sourcePath string, count int, onLog LogHandler) ([]float64, error) {

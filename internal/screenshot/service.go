@@ -8,8 +8,9 @@ import (
 	"sort"
 	"strings"
 
+	"mediainfo/internal/media"
 	"mediainfo/internal/screenshot/engine"
-	"mediainfo/internal/system"
+	"mediainfo/internal/screenshot/pixhost"
 )
 
 const (
@@ -65,6 +66,12 @@ func RunScript(ctx context.Context, inputPath, outputDir, variant, subtitleMode 
 }
 
 func RunScriptWithLogs(ctx context.Context, inputPath, outputDir, variant, subtitleMode string, count int) (ScriptResult, error) {
+	resolvedPath, cleanup, err := media.ResolveScreenshotSource(ctx, inputPath)
+	if err == nil {
+		defer cleanup()
+		inputPath = resolvedPath
+	}
+
 	capResult, err := defaultEngine.Capture(ctx, engine.CaptureOptions{
 		SourcePath:   inputPath,
 		OutputDir:    outputDir,
@@ -102,35 +109,45 @@ func RunUpload(ctx context.Context, inputPath, outputDir, variant, subtitleMode 
 }
 
 func RunUploadWithLogs(ctx context.Context, inputPath, outputDir, variant, subtitleMode string, count int) (UploadResult, error) {
-	uploadScript, err := resolveUploadScript()
-	if err != nil {
-		return UploadResult{}, err
-	}
-
 	screenshotResult, err := RunScriptWithLogs(ctx, inputPath, outputDir, variant, subtitleMode, count)
 	if err != nil {
 		return UploadResult{Logs: screenshotResult.Logs}, err
 	}
 
-	stdout, stderr, err := system.RunCommand(ctx, "bash", uploadScript, outputDir)
-	uploadLogs := system.CombineCommandOutput(stdout, stderr)
-	logs := strings.TrimSpace(strings.Join(filterNonEmptyStrings(screenshotResult.Logs, uploadLogs), "\n\n"))
+	imagePaths := make([]string, 0, len(screenshotResult.Files))
+	for _, f := range screenshotResult.Files {
+		imagePaths = append(imagePaths, f.Path)
+	}
+
+	if len(imagePaths) == 0 {
+		return UploadResult{Logs: screenshotResult.Logs}, errors.New("no screenshots were generated")
+	}
+
+	var lossyFiles []string
+	for _, f := range screenshotResult.Files {
+		if f.Size > 0 && f.Size > 1024*1024 {
+			lossyFiles = append(lossyFiles, f.Name)
+		}
+	}
+
+	result, err := pixhost.UploadImages(ctx, imagePaths, lossyFiles, 10*1024*1024, nil, nil)
+
+	logs := strings.TrimSpace(screenshotResult.Logs)
+	if result.Logs != "" {
+		if logs != "" {
+			logs += "\n\n"
+		}
+		logs += result.Logs
+	}
+
 	if err != nil {
 		return UploadResult{Logs: logs}, err
 	}
 
-	links := extractDirectLinks(stdout)
-	if len(links) == 0 {
-		output := strings.TrimSpace(stdout)
-		if output == "" {
-			output = strings.TrimSpace(stderr)
-		}
-		if output == "" {
-			return UploadResult{Logs: logs}, errors.New("pixhost upload completed but returned no links")
-		}
-		return UploadResult{Output: output, Logs: logs}, nil
+	if result.Output == "" {
+		return UploadResult{Logs: logs}, errors.New("pixhost upload completed but returned no links")
 	}
-	return UploadResult{Output: strings.Join(links, "\n"), Logs: logs}, nil
+	return UploadResult{Output: result.Output, Logs: logs}, nil
 }
 
 func RunEngineCapture(ctx context.Context, inputPath, outputDir, variant, subtitleMode string, count int) (*engine.CaptureResult, error) {
@@ -160,66 +177,6 @@ func CompressAllScreenshots(ctx context.Context, files []string, threshold int64
 		}
 	}
 	return results
-}
-
-func resolveUploadScript() (string, error) {
-	const scriptDir = "/usr/local/share/mediainfo/scripts"
-	const name = "PixhostUpload.sh"
-
-	if value := strings.TrimSpace(os.Getenv("SCREENSHOT_UPLOAD_SCRIPT")); value != "" {
-		info, err := os.Stat(value)
-		if err != nil {
-			return "", err
-		}
-		if info.IsDir() {
-			return "", errors.New("SCREENSHOT_UPLOAD_SCRIPT must point to a file")
-		}
-		return value, nil
-	}
-
-	candidate := filepath.Join(scriptDir, name)
-	info, err := os.Stat(candidate)
-	if err == nil && !info.IsDir() {
-		return candidate, nil
-	}
-
-	return "", errors.New("PixhostUpload.sh not found; set SCREENSHOT_UPLOAD_SCRIPT")
-}
-
-func extractDirectLinks(output string) []string {
-	lines := strings.Split(output, "\n")
-	links := make([]string, 0, len(lines))
-	seen := make(map[string]struct{}, len(lines))
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		if !strings.HasPrefix(line, "http://") && !strings.HasPrefix(line, "https://") {
-			continue
-		}
-		if strings.ContainsAny(line, " []()<>\"") {
-			continue
-		}
-		if _, ok := seen[line]; ok {
-			continue
-		}
-		seen[line] = struct{}{}
-		links = append(links, line)
-	}
-	return links
-}
-
-func filterNonEmptyStrings(values ...string) []string {
-	filtered := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		filtered = append(filtered, value)
-	}
-	return filtered
 }
 
 func listScreenshotFiles(dir string) ([]ScreenshotFileInfo, error) {

@@ -112,7 +112,7 @@ func BDInfoHandler(envKey, fallback string) http.HandlerFunc {
 		}
 		defer bdCleanup()
 
-		stdout, stderr, err := system.RunCommand(ctx, bin, bdPath)
+		stdout, stderr, err := system.RunCommand(ctx, bin, "-w", bdPath)
 		if err != nil {
 			transport.WriteError(w, http.StatusInternalServerError, system.BestErrorMessage(err, stderr, stdout))
 			return

@@ -19,6 +19,11 @@ FROM ghcr.io/yeahzero/mediainfowebui@sha256:7fd1ba1b9aa59dbc4e48b45eb67ea5638f07
 # 无需重新安装，直接使用
 
 # ============================================
+# Stage: BDInfo - 从 minfo 镜像提取 BDInfo
+# ============================================
+FROM ghcr.io/mirrorb/minfo:latest AS bdinfo-source
+
+# ============================================
 # Stage: WebUI Build
 # ============================================
 FROM --platform=$BUILDPLATFORM node:20-alpine AS webui
@@ -74,10 +79,11 @@ RUN set -eux; \
 FROM base AS native
 ARG ALPINE_MIRROR
 RUN sed -i "s|dl-cdn.alpinelinux.org|${ALPINE_MIRROR}|g" /etc/apk/repositories
-RUN apk add --no-cache mkvtoolnix
+RUN apk upgrade --no-cache musl && apk add --no-cache mkvtoolnix
 
-# BDInfo 在部署时自动构建（通过 docker-compose bdinfo-builder 服务）
-# 构建后通过共享卷挂载到 /usr/local/bin/BDInfo
+# BDInfo 从 ghcr.io/mirrorb/minfo:latest 镜像提取
+COPY --from=bdinfo-source /usr/local/bin/bdinfo /opt/bdinfo/BDInfo
+RUN chmod +x /opt/bdinfo/BDInfo
 
 COPY --from=build-native /out/bdmv_subtitle_probe /usr/local/bin/bdmv_subtitle_probe
 RUN chmod +x /usr/local/bin/bdmv_subtitle_probe

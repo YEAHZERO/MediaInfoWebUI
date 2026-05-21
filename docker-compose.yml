@@ -1,18 +1,4 @@
 services:
-  bdinfo-builder:
-    image: mcr.microsoft.com/dotnet/sdk:9.0-alpine
-    container_name: bdinfo-builder
-    entrypoint: /scripts/build-bdinfo.sh
-    network_mode: host
-    environment:
-      ALPINE_MIRROR: mirrors.aliyun.com
-      GITHUB_MIRROR: https://githubfast.com
-      no_proxy: "*"
-    volumes:
-      - bdinfo-data:/shared
-      - ./scripts:/scripts:ro
-    restart: "no"
-
   mediainfo:
     image: ghcr.io/yeahzero/mediainfowebui:latest
     container_name: mediainfo
@@ -22,9 +8,10 @@ services:
       args:
         ALPINE_MIRROR: mirrors.aliyun.com
         NPM_REGISTRY: https://registry.npmmirror.com
-    depends_on:
-      bdinfo-builder:
-        condition: service_completed_successfully
+        BUILD_TIME: ${BUILD_TIME:-2026-05-21T00:00:00Z}
+        BUILD_VERSION: ${BUILD_VERSION:-1.5.6}
+        BUILD_COMMIT: ${BUILD_COMMIT:-local}
+        PROJECT_VERSION: ${PROJECT_VERSION:-1.5.6}
     privileged: true
     ports:
       - "28888:28888"
@@ -38,13 +25,9 @@ services:
     volumes:
       - /lib/modules:/lib/modules:ro
       - ${MEDIA_PATH:-/path/to/your/media}:/media:ro
-      - bdinfo-data:/opt/bdinfo:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:28888/api/version"]
       interval: 30s
       timeout: 10s
       retries: 3
-
-volumes:
-  bdinfo-data:

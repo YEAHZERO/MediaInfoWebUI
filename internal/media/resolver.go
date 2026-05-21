@@ -25,36 +25,53 @@ type videoCandidate struct {
 }
 
 func ResolveScreenshotSource(ctx context.Context, input string) (string, func(), error) {
-	pt, _ := classifyPath(input)
-	r := resolveResolver(pt)
-	if r != nil {
-		rc := ResolveContext{Context: ctx, Input: input, Type: pt}
-		return r.ResolveScreenshot(rc)
-	}
-
 	info, err := os.Stat(input)
 	if err != nil {
 		return "", func() {}, err
 	}
+	if !info.IsDir() {
+		if isISOFile(input) {
+			return resolveM2TSFromMountedISO(ctx, input)
+		}
+		return input, func() {}, nil
+	}
 
-	if info.IsDir() {
-		if bdmvPath := findBDMVInSubdirs(input); bdmvPath != "" {
-			if _, ok := resolveBDMVRoot(bdmvPath); ok {
-				m2ts, err := findLargestM2TS(bdmvPath)
-				if err == nil {
-					return m2ts, func() {}, nil
-				}
+	if bdmvRoot, ok := resolveBDMVRoot(input); ok {
+		m2ts, err := findLargestM2TS(bdmvRoot)
+		if err != nil {
+			return "", func() {}, err
+		}
+		return m2ts, func() {}, nil
+	}
+
+	isoPath, err := findISOInDir(input)
+	if err == nil {
+		return resolveM2TSFromMountedISO(ctx, isoPath)
+	}
+	if !errors.Is(err, errNoISO) {
+		return "", func() {}, err
+	}
+
+	bdmvPath := findBDMVInSubdirs(input)
+	if bdmvPath != "" {
+		if _, ok := resolveBDMVRoot(bdmvPath); ok {
+			m2ts, err := findLargestM2TS(bdmvPath)
+			if err == nil {
+				return m2ts, func() {}, nil
 			}
 		}
-		if _, m2tsPath, err := findBDMVInNestedDirs(input); err == nil && m2tsPath != "" {
-			return m2tsPath, func() {}, nil
-		}
-		if isoPath := findISOInSubdirs(input); isoPath != "" {
-			return resolveM2TSFromMountedISO(ctx, isoPath)
-		}
-		return findVideoFile(input), func() {}, nil
 	}
-	return input, func() {}, nil
+
+	isoPath = findISOInSubdirs(input)
+	if isoPath != "" {
+		return resolveM2TSFromMountedISO(ctx, isoPath)
+	}
+
+	videoPath := findVideoFile(input)
+	if videoPath != "" {
+		return videoPath, func() {}, nil
+	}
+	return "", func() {}, errors.New("no video files found")
 }
 
 func ResolveMediaInfoCandidates(ctx context.Context, input string, limit int) ([]string, func(), error) {
@@ -82,37 +99,38 @@ func ResolveMediaInfoCandidates(ctx context.Context, input string, limit int) ([
 }
 
 func ResolveBDInfoSource(ctx context.Context, input string) (string, func(), error) {
-	pt, _ := classifyPath(input)
-	r := resolveResolver(pt)
-	if r != nil {
-		rc := ResolveContext{Context: ctx, Input: input, Type: pt}
-		return r.ResolveBDInfo(rc)
-	}
-
 	info, err := os.Stat(input)
 	if err != nil {
 		return "", func() {}, err
 	}
-
 	if !info.IsDir() {
+		if isISOFile(input) {
+			return resolveBDInfoFromMountedISO(ctx, input)
+		}
 		return "", func() {}, errors.New("path must be a folder containing BDMV or ISO")
 	}
 
-	if bdmvPath := findBDMVInSubdirs(input); bdmvPath != "" {
+	if bdmvRoot, ok := resolveBDInfoRoot(input); ok {
+		return bdmvRoot, func() {}, nil
+	}
+
+	isoPath, err := findISOInDir(input)
+	if err == nil {
+		return resolveBDInfoFromMountedISO(ctx, isoPath)
+	}
+	if !errors.Is(err, errNoISO) {
+		return "", func() {}, err
+	}
+
+	bdmvPath := findBDMVInSubdirs(input)
+	if bdmvPath != "" {
 		if bdRoot, ok := resolveBDInfoRoot(bdmvPath); ok {
 			return bdRoot, func() {}, nil
 		}
 	}
 
-	bdmvPath, m2tsPath, err := findBDMVInNestedDirs(input)
-	if err == nil && bdmvPath != "" {
-		if m2tsPath != "" {
-			return m2tsPath, func() {}, nil
-		}
-		return bdmvPath, func() {}, nil
-	}
-
-	if isoPath := findISOInSubdirs(input); isoPath != "" {
+	isoPath = findISOInSubdirs(input)
+	if isoPath != "" {
 		return resolveBDInfoFromMountedISO(ctx, isoPath)
 	}
 

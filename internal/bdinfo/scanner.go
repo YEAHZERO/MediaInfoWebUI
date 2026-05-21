@@ -145,7 +145,8 @@ func scanModeArgs(scanMode string, selectedMpls []string) []string {
 			return []string{"--playlists", strings.Join(selectedMpls, ",")}
 		}
 	}
-	return nil
+	// 默认 whole-disc 模式，避免无 TTY 环境下的交互式异常
+	return []string{"-w"}
 }
 
 func outputArgs(jobDir string) []string {
