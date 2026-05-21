@@ -19,6 +19,7 @@ func NewHandler(assets fs.FS) http.Handler {
 	mux.HandleFunc("/api/screenshots", handlers.ScreenshotsHandler)
 	mux.HandleFunc("/api/path", handlers.PathSuggestHandler)
 	mux.HandleFunc("/api/version", handlers.VersionHandler)
+	mux.HandleFunc("/api/health", handlers.HealthHandler)
 
 	mux.HandleFunc("/api/bdinfo/playlists", handlers.BDInfoListPlaylistsHandler)
 	mux.HandleFunc("/api/bdinfo/jobs", handlers.BDInfoListJobsHandler)

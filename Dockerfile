@@ -1,202 +1,94 @@
-ARG GO_VERSION=1.26.1
-ARG ALPINE_VERSION=edge
-ARG ALPINE_EDGE_REPO=https://mirrors.aliyun.com/alpine/edge
-ARG FFMPEG_PKG=ffmpeg
-ARG BDINFO_REPO=https://github.com/mirrorb/BDInfoCLI.git
-ARG BDINFO_REF=master
-ARG BDINFO_CSPROJ=BDInfo/BDInfo.csproj
+# ============================================
+# MediaInfoWebUI Dockerfile
+#
+# 构建策略：
+# 1. 从上一版 mediainfowebui 镜像提取所有依赖（ffmpeg、mediainfo、字体等）
+# 2. 只覆盖修改的二进制文件（BDInfo、bdmv_subtitle_probe、mediainfo）
+#
+# 容器管理：
+# - 启动新容器前务必先删除旧容器：docker rm -f mediainfo（非常重要！！！！）
+# ============================================
+
+ARG ALPINE_MIRROR=mirrors.aliyun.com
 
 # ============================================
-# Stage: WebUI 构建
+# Stage: Base - 从上一版镜像提取依赖（锁定 digest 确保构建一致性）
+# ============================================
+FROM ghcr.io/yeahzero/mediainfowebui@sha256:7fd1ba1b9aa59dbc4e48b45eb67ea5638f07cbc9675342314d8b35a23a3d9fe1 AS base
+# 上一版镜像已包含：ffmpeg、mediainfo、字体、libplacebo 等所有依赖
+# 无需重新安装，直接使用
+
+# ============================================
+# Stage: WebUI Build
 # ============================================
 FROM --platform=$BUILDPLATFORM node:20-alpine AS webui
+ARG NPM_REGISTRY=https://registry.npmmirror.com
 WORKDIR /app
 COPY webui/package.json ./
-RUN npm install --no-audit --no-fund
+RUN npm install --no-audit --no-fund --registry ${NPM_REGISTRY}
 COPY webui .
 RUN npm run build
 
 # ============================================
-# Stage: Go 后端构建 (CGO=0)
+# Stage: Go Backend Build (Native, with CGO)
 # ============================================
-FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.26.1-alpine AS build-native
+ARG ALPINE_MIRROR
+RUN sed -i "s|dl-cdn.alpinelinux.org|${ALPINE_MIRROR}|g" /etc/apk/repositories
+
 WORKDIR /src
 COPY go.mod go.sum ./
 COPY *.go ./
 COPY cmd ./cmd
 COPY internal ./internal
 COPY --from=webui /app/dist ./webui/dist
+COPY tools/bdmv_subtitle_probe.c ./tools/bdmv_subtitle_probe.c
+
 ARG TARGETOS
 ARG TARGETARCH
-ENV CGO_ENABLED=0
-ENV GOPROXY=https://goproxy.cn,direct
 ARG BUILD_TIME
 ARG BUILD_VERSION
 ARG BUILD_COMMIT
-
-RUN BUILD_TIME=${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)} && \
-    BUILD_VERSION=${BUILD_VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo "dev")} && \
-    BUILD_COMMIT=${BUILD_COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")} && \
-    GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -buildvcs=false -ldflags="-s -w -X mediainfo/internal/httpapi/handlers.BuildTime=${BUILD_TIME} -X mediainfo/internal/httpapi/handlers.BuildVersion=${BUILD_VERSION} -X mediainfo/internal/httpapi/handlers.BuildCommit=${BUILD_COMMIT}" -o /out/mediainfo ./cmd/mediainfo
-
-# ============================================
-# Stage: Go 后端构建 (Native, with CGO)
-# ============================================
-FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS build-native
-WORKDIR /src
-COPY go.mod go.sum ./
-COPY *.go ./
-COPY cmd ./cmd
-COPY internal ./internal
-COPY --from=webui /app/dist ./webui/dist
-ARG TARGETOS
-ARG TARGETARCH
+ARG PROJECT_VERSION
 ENV CGO_ENABLED=1
 ENV GOPROXY=https://goproxy.cn,direct
-ARG BUILD_TIME
-ARG BUILD_VERSION
-ARG BUILD_COMMIT
-
-RUN apk add --no-cache gcc musl-dev && \
-    BUILD_TIME=${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)} && \
-    BUILD_VERSION=${BUILD_VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo "dev")} && \
-    BUILD_COMMIT=${BUILD_COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")} && \
-    GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -buildvcs=false -tags native -ldflags="-s -w -X mediainfo/internal/httpapi/handlers.BuildTime=${BUILD_TIME} -X mediainfo/internal/httpapi/handlers.BuildVersion=${BUILD_VERSION} -X mediainfo/internal/httpapi/handlers.BuildCommit=${BUILD_COMMIT}" -o /out/mediainfo ./cmd/mediainfo
-
-# ============================================
-# Stage: BDInfo CLI 构建 (.NET)
-# ============================================
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:9.0-alpine AS bdinfo-build
-ARG BDINFO_REPO
-ARG BDINFO_REF
-ARG BDINFO_CSPROJ
-ARG TARGETARCH
-RUN apk add --no-cache git ca-certificates
-RUN git clone --depth 1 --branch "$BDINFO_REF" "$BDINFO_REPO" /src/bdinfo
-WORKDIR /src/bdinfo
-RUN set -eux; \
-    case "$TARGETARCH" in \
-        amd64) rid="linux-musl-x64" ;; \
-        arm64) rid="linux-musl-arm64" ;; \
-        *) echo "unsupported TARGETARCH=$TARGETARCH" >&2; exit 1 ;; \
-    esac; \
-    dotnet restore "$BDINFO_CSPROJ"; \
-    dotnet publish "$BDINFO_CSPROJ" -c Release -r "$rid" --self-contained true \
-        -p:PublishSingleFile=true \
-        -p:EnableCompressionInSingleFile=true \
-        -p:DebugType=None \
-        -p:DebugSymbols=false \
-        -o /out/bdinfo; \
-    exe=""; \
-    for f in /out/bdinfo/*; do \
-        [ -f "$f" ] || continue; \
-        [ -x "$f" ] || continue; \
-        case "${f##*.}" in \
-            dll|json|pdb) continue ;; \
-        esac; \
-        exe="$f"; \
-        break; \
-    done; \
-    if [ -n "$exe" ]; then \
-        if [ "$exe" != "/out/bdinfo/BDInfo" ]; then \
-            mv "$exe" /out/bdinfo/BDInfo; \
-        fi; \
-    else \
-        echo "BDInfo executable not found" >&2; exit 1; \
-    fi; \
-    chmod +x /out/bdinfo/BDInfo; \
-    find /out/bdinfo -type f \( -name '*.pdb' -o -name '*.xml' -o -name '*.dbg' \) -delete
-
-# ============================================
-# Stage: BD 元数据 helper (C 工具)
-# ============================================
-FROM alpine:${ALPINE_VERSION} AS media-helper-build
-WORKDIR /src
-RUN apk add --no-cache build-base
-COPY tools/bdmv_subtitle_probe.c ./tools/bdmv_subtitle_probe.c
-RUN mkdir -p /out && \
-    cc -O2 -Wall -Wextra -std=c11 ./tools/bdmv_subtitle_probe.c -o /out/bdsub
-
-# ============================================
-# Stage: 轻量版镜像（脚本引擎）
-# 包含 bdinfo.sh 脚本，用户需自行挂载 BDInfoCLI
-# ============================================
-FROM alpine:${ALPINE_VERSION} AS runtime-light
-ARG ALPINE_EDGE_REPO
-
-COPY --from=build /out/mediainfo /usr/local/bin/mediainfo
-COPY --from=media-helper-build /out/bdsub /usr/local/bin/bdsub
-COPY bdinfo.sh /usr/local/bin/bdinfo
+ENV BUILD_TIME=${BUILD_TIME}
+ENV BUILD_VERSION=${BUILD_VERSION}
+ENV BUILD_COMMIT=${BUILD_COMMIT}
+ENV PROJECT_VERSION=${PROJECT_VERSION}
 
 RUN set -eux; \
-    printf '%s\n%s\n' "${ALPINE_EDGE_REPO}/main" "${ALPINE_EDGE_REPO}/community" > /etc/apk/repositories; \
-    apk add --no-cache \
-        ca-certificates \
-        mediainfo \
-        ffmpeg \
-        p7zip \
-        udftools \
-        kmod \
-        util-linux \
-        tzdata \
-        font-wqy-zenhei \
-        fontconfig && \
-    chmod +x /usr/local/bin/mediainfo /usr/local/bin/bdsub /usr/local/bin/bdinfo && \
-    rm -rf /var/cache/apk/* /usr/share/doc /usr/share/man /usr/share/info
-
-WORKDIR /app
-ENV LANG=C.UTF-8
-ENV LC_ALL=C.UTF-8
-ENV PORT=28888
-ENV MEDIAINFO_BIN=/usr/bin/mediainfo
-ENV BDINFO_BIN=/opt/bdinfo/BDInfo
-ENV ENGINE_TYPE=script
-ENTRYPOINT ["/usr/local/bin/mediainfo"]
+    apk add --no-cache gcc musl-dev; \
+    GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -buildvcs=false -tags "native websocket" \
+        -ldflags="-s -w \
+            -X mediainfo/internal/httpapi/handlers.BuildTime=${BUILD_TIME} \
+            -X mediainfo/internal/httpapi/handlers.BuildVersion=${BUILD_VERSION} \
+            -X mediainfo/internal/httpapi/handlers.BuildCommit=${BUILD_COMMIT} \
+            -X mediainfo/internal/version.Version=${PROJECT_VERSION}" \
+        -o /out/mediainfo ./cmd/mediainfo; \
+    gcc -O2 -static -o /out/bdmv_subtitle_probe ./tools/bdmv_subtitle_probe.c
 
 # ============================================
-# Stage: Native 版镜像（原生引擎 + libplacebo + BDInfoCLI，推荐）
-# 包含完整的 BDInfoCLI 二进制
+# Stage: Final - 只覆盖修改的二进制文件
 # ============================================
-FROM alpine:${ALPINE_VERSION} AS runtime-native
-ARG ALPINE_EDGE_REPO
+FROM base AS native
+ARG ALPINE_MIRROR
+RUN sed -i "s|dl-cdn.alpinelinux.org|${ALPINE_MIRROR}|g" /etc/apk/repositories
+RUN apk add --no-cache mkvtoolnix
+
+# BDInfo 在部署时自动构建（通过 docker-compose bdinfo-builder 服务）
+# 构建后通过共享卷挂载到 /usr/local/bin/BDInfo
+
+COPY --from=build-native /out/bdmv_subtitle_probe /usr/local/bin/bdmv_subtitle_probe
+RUN chmod +x /usr/local/bin/bdmv_subtitle_probe
 
 COPY --from=build-native /out/mediainfo /usr/local/bin/mediainfo
-COPY --from=media-helper-build /out/bdsub /usr/local/bin/bdsub
-COPY --from=bdinfo-build /out/bdinfo/BDInfo /usr/local/bin/BDInfo
+RUN chmod +x /usr/local/bin/mediainfo
 
-RUN set -eux; \
-    printf '%s\n%s\n' "${ALPINE_EDGE_REPO}/main" "${ALPINE_EDGE_REPO}/community" > /etc/apk/repositories; \
-    apk add --no-cache \
-        ca-certificates \
-        mediainfo \
-        ffmpeg \
-        p7zip \
-        udftools \
-        kmod \
-        libgdiplus \
-        libplacebo \
-        vulkan-loader \
-        oxipng \
-        pngquant \
-        util-linux \
-        tzdata \
-        font-wqy-zenhei \
-        fontconfig && \
-    chmod +x /usr/local/bin/mediainfo /usr/local/bin/bdsub /usr/local/bin/BDInfo && \
-    rm -rf /var/cache/apk/* /usr/share/doc /usr/share/man /usr/share/info
-
-WORKDIR /app
-ENV LANG=C.UTF-8
-ENV LC_ALL=C.UTF-8
-ENV PORT=28888
-ENV MEDIAINFO_BIN=/usr/bin/mediainfo
-ENV BDINFO_BIN=/usr/local/bin/BDInfo
+ENV BDINFO_BIN=/opt/bdinfo/BDInfo
 ENV ENGINE_TYPE=native
 ENV ENABLE_NATIVE_ENGINE=1
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+ENV PORT=28888
+EXPOSE 28888
 ENTRYPOINT ["/usr/local/bin/mediainfo"]
-
-# ============================================
-# 默认镜像为 native (latest 标签指向此版本)
-# ============================================
-FROM runtime-native AS final

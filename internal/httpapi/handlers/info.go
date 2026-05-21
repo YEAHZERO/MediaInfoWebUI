@@ -217,9 +217,26 @@ func MkvMergeTrackInfoHandler() http.HandlerFunc {
 			log.Printf("[mkvmerge] ResolveScreenshotSource failed: %v", err)
 		}
 
-		// 如果 ResolveScreenshotSource 失败，尝试在整个目录树中查找最大的 m2ts 文件
+		// 直接处理单个视频文件
 		info, err := os.Stat(path)
-		if err == nil && info.IsDir() {
+		if err == nil && !info.IsDir() {
+			if isMkvMergeSupportedVideo(path) {
+				log.Printf("[mkvmerge] Direct video file: %s", path)
+				stdout, stderr, err := system.RunCommand(ctx, bin, "-i", path)
+				if err == nil {
+					output := system.CombineCommandOutput(stdout, stderr)
+					if output != "" {
+						log.Printf("[mkvmerge] Success from direct video file")
+						transport.WriteJSON(w, http.StatusOK, transport.InfoResponse{OK: true, Output: output})
+						return
+					}
+				}
+			}
+		}
+
+		// 如果 ResolveScreenshotSource 失败，尝试在整个目录树中查找最大的 m2ts 文件
+		log.Printf("[mkvmerge] Falling back to searching for largest m2ts in directory")
+		if info, err := os.Stat(path); err == nil && info.IsDir() {
 			log.Printf("[mkvmerge] Path is a directory, searching for m2ts files")
 			// 首先尝试查找最大的 m2ts 文件（类似 MediaInfo 的做法）
 			m2tsPath, err := findLargestM2TSInTree(path)
@@ -330,4 +347,16 @@ func findLargestM2TSInTree(root string) (string, error) {
 		return "", fmt.Errorf("no m2ts files found in directory tree")
 	}
 	return largestPath, nil
+}
+
+// isMkvMergeSupportedVideo 检查文件是否是 mkvmerge 支持的视频文件
+func isMkvMergeSupportedVideo(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	supportedExts := []string{".mkv", ".mka", ".mks", ".mk3d", ".mp4", ".m4v", ".m4a", ".m4b", ".m4p", ".webm", ".webma", ".webmv", ".avi", ".mov", ".qt", ".mpeg", ".mpg", ".m2v", ".ts", ".m2ts", ".mts", ".wav", ".flac", ".ogg", ".ogm", ".opus"}
+	for _, supported := range supportedExts {
+		if ext == supported {
+			return true
+		}
+	}
+	return false
 }

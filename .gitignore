@@ -11,3 +11,4 @@ __debug_bin*
 /mediainfo
 build_and_push.sh
 build_and_push.sh
+test-paths.sh

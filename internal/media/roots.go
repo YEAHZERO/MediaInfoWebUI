@@ -10,6 +10,19 @@ import (
 )
 
 func MediaRoots() []string {
+	if envRoot := strings.TrimSpace(os.Getenv("MEDIA_ROOT")); envRoot != "" {
+		roots := strings.Split(envRoot, ":")
+		cleaned := make([]string, 0, len(roots))
+		for _, r := range roots {
+			r = strings.TrimSpace(r)
+			if r != "" {
+				cleaned = append(cleaned, r)
+			}
+		}
+		if len(cleaned) > 0 {
+			return cleaned
+		}
+	}
 	if roots := detectMountedRoots(); len(roots) > 0 {
 		return roots
 	}

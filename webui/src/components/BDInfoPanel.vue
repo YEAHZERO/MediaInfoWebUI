@@ -31,7 +31,7 @@
                         :disabled="busy"
                         @click="scanMode = 'auto'"
                     >
-                        自动选择
+                        智能推荐
                     </button>
                     <button
                         type="button"
@@ -40,7 +40,7 @@
                         :disabled="busy"
                         @click="handleManualMode"
                     >
-                        手动选择
+                        手动选取
                     </button>
                     <button
                         type="button"
@@ -49,7 +49,7 @@
                         :disabled="busy"
                         @click="scanMode = 'whole'"
                     >
-                        整盘扫描
+                        完整扫描
                     </button>
                 </div>
             </div>

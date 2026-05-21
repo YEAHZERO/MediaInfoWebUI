@@ -3,7 +3,7 @@
 > 基于 [minfo](https://github.com/mirrorb/minfo) 改进的本地媒体信息检测 Web 工具
 
 [![Docker Pulls](https://img.shields.io/badge/Docker-GHCR-blue)](https://github.com/YEAHZERO/MediaInfoWebUI/pkgs/container/mediainfowebui)
-[![Version](https://img.shields.io/badge/version-1.5.4-green)](https://github.com/YEAHZERO/MediaInfoWebUI/releases/tag/v1.5.3)
+[![Version](https://img.shields.io/badge/version-1.5.5-green)](https://github.com/YEAHZERO/MediaInfoWebUI/releases/tag/v1.5.5)
 
 ## 目录
 
@@ -102,7 +102,6 @@
 
 - 📂 **多路径挂载**：支持挂载多个独立的媒体目录
 - 🚀 **远程部署**：一键部署到远程服务器
-- 🔧 **构建代理**：支持配置 HTTP/HTTPS 代理用于 Docker 构建
 - 🌐 **网络优化**：Docker 构建使用 `--network=host` 解决网络问题
 
 ***
@@ -115,59 +114,36 @@
 - 支持 x86\_64 / ARM64 架构
 - 宿主机需加载 `loop` 模块（用于挂载 ISO/BDMV）
 
-### 镜像标签选择
+### 镜像标签
 
-| 标签        | 描述        | 引擎        | BDInfoCLI | HDR 映射 | PNG 优化 | 大小 (压缩) | 适用场景                 |
-| --------- | --------- | --------- | :-------: | :------: | :------: | ---------- | -------------------- |
-| `:light`  | 轻量版       | 脚本引擎      |   ❌ 需挂载   |    ❌    |    ❌    | ~80MB      | 基础 mediainfo + 截图，需自行提供 BDInfoCLI |
-| `:latest` | 全功能版（推荐） | Native 引擎 |   ✅ 内置    |    ✅    |    ✅    | ~100MB     | 完整功能，含 BDInfoCLI、HDR 映射、PNG 压缩 |
+| 标签          | 描述       | 引擎        | BDInfoCLI | HDR 映射 | PNG 优化 | 适用场景                          |
+| ----------- | -------- | --------- | :-------: | :----: | :----: | ----------------------------- |
+| `:native` / `:latest` | 全功能版（推荐） | Native 引擎 |    ✅ 内置   |    ✅   |    ✅   | 完整功能，含 BDInfoCLI、HDR 映射、PNG 压缩 |
 
-### 镜像版本区别
+### 镜像说明
 
-#### `:light`（轻量版）
-- **BDInfoCLI**：不包含，需用户自行挂载 `/opt/bdinfo/BDInfo`
-- **引擎**：脚本引擎，功能有限
-- **适用场景**：基础 mediainfo 查询和简单截图
-
-#### `:latest`（全功能版）
-- **BDInfoCLI**：内置完整的 BDInfoCLI（约 35MB）
+- **基础镜像**：基于 `ghcr.io/yeahzero/mediainfowebui:latest` 构建
+- **构建策略**：从上一版镜像提取所有依赖，只覆盖修改的二进制文件
+- **BDInfoCLI**：内置完整的 BDInfoCLI（从源码编译）
 - **引擎**：Native 引擎，支持高级功能
 - **HDR 映射**：支持 HDR→SDR 色彩转换（libplacebo）
 - **PNG 优化**：支持 oxipng + pngquant 压缩
-- **适用场景**：完整功能体验，推荐使用
+- **BDMV 字幕探测**：内置 `bdmv_subtitle_probe` 工具，增强蓝光原盘支持
 
-### BDInfoCLI 说明
-
-**`:light` 版本使用 BDInfo**：
-
-```bash
-# 方式 1：挂载包含 BDInfoCLI 的目录
-docker run -d \
-  -v /path/to/your/bdinfo:/opt/bdinfo \
-  ghcr.io/yeahzero/mediainfowebui:light
-
-# 方式 2：设置环境变量指定路径
-docker run -d \
-  -e BDINFO_BIN=/custom/path/BDInfo \
-  -v /path/to/BDInfo:/custom/path/BDInfo \
-  ghcr.io/yeahzero/mediainfowebui:light
-```
-
-**获取 BDInfoCLI**：
-```bash
-mkdir -p /opt/bdinfo
-cd /opt/bdinfo
-curl -sSL https://github.com/mirrorb/BDInfoCLI/releases/latest/download/BDInfoCLI-linux-x64.zip -o bdinfo.zip
-unzip bdinfo.zip
-chmod +x BDInfo
-```
-
-> **镜像体积优化**：通过多阶段构建和文件清理，镜像体积已大幅减小。构建阶段（Go 编译器、Node.js 构建环境、.NET SDK）不进入最终镜像，仅保留运行时依赖。
+> **镜像优化策略**：
+> 1. 从上一版 `ghcr.io/yeahzero/mediainfowebui:latest` 镜像提取所有依赖
+> 2. 只覆盖修改的二进制文件（BDInfo、bdmv_subtitle_probe、mediainfo）
+> 3. 构建阶段（Go 编译器、Node.js、.NET SDK）不进入最终镜像
 
 ### 一行命令部署
 
+> **重要**：启动新容器前务必先删除旧容器！
+
 ```bash
-# 替换 :latest 为 :light 或 :native 以选择不同版本
+# 强制删除旧容器（非常重要！！！！）
+docker rm -f mediainfo
+
+# 然后启动新容器
 docker run -d \
   --name mediainfo \
   --privileged \
@@ -221,14 +197,11 @@ docker compose up -d
 git clone https://github.com/YEAHZERO/MediaInfoWebUI.git
 cd MediaInfoWebUI
 
-# 轻量版
-docker build --network=host --target runtime-light -t mediainfowebui:light .
+# 构建 native 版本（推荐）
+docker build --network=host --target native -t mediainfowebui:native .
 
-# 标准版（推荐）
-docker build --network=host --target runtime-standard -t mediainfowebui:latest .
-
-# 全功能版（Native 引擎，含 libplacebo HDR 映射）
-docker build --network=host --target runtime-native -t mediainfowebui:native .
+# 或使用 make
+make docker-native  # 构建 native 版本
 
 # 运行
 docker run -d --name mediainfo --privileged --network host \
@@ -236,12 +209,114 @@ docker run -d --name mediainfo --privileged --network host \
   -v /lib/modules:/lib/modules:ro \
   -v /path/to/media:/media:ro \
   --restart unless-stopped \
-  mediainfowebui:latest
+  mediainfowebui:native
 ```
 
 > **构建网络问题**：如遇 `failed to create endpoint ... on network bridge: operation not supported`，务必加 `--network=host`。
+> **网络问题解决方案**：确保使用标准 GitHub URL（github.com），避免使用镜像站点导致连接问题。
 
 访问 `http://你的服务器IP:28888`
+
+### 部署方式选择
+
+你可以选择以下任意一种部署方式：
+
+#### 方式一：一键自动部署（推荐）
+
+提供自动识别环境并部署的脚本：
+
+```bash
+# 克隆仓库（如需要）
+git clone https://github.com/YEAHZERO/MediaInfoWebUI.git
+cd MediaInfoWebUI
+
+# 一键部署（推荐）
+./deploy.sh
+
+# 自定义容器名和端口
+./deploy.sh latest my-media-container 28888
+```
+
+**特点**：
+
+- ✅ 自动检测 WSL 或服务器环境
+- ✅ **智能路径查找**：按优先级搜索，支持智能识别有 docker/qb 文件夹的上级目录
+- ✅ 自动选择正确的网络模式
+- ✅ 彩色输出，友好提示
+
+**智能路径查找优先级**：
+
+1. **优先路径**：/home/liveup/ → /home/live/ → $HOME/ 下的 qbittorrent/downloads
+2. **智能查找**：查找有 docker 或 qb 文件夹的用户目录下的下载文件夹
+3. **后备路径**：常见路径如 /data/、/media/ 等
+
+#### 方式二：手动 Docker 部署
+
+如果需要完全自定义路径和配置，可以使用以下命令：
+
+```bash
+# 拉取镜像
+docker pull ghcr.io/yeahzero/mediainfowebui:latest
+
+# 服务器部署（使用 host 网络）
+docker run -d --name mediainfo --privileged --network host \
+  -e TZ=Asia/Shanghai -e PORT=28888 -e REQUEST_TIMEOUT=30m \
+  -e MEDIAINFO_BIN=/usr/bin/mediainfo \
+  -v /home/<your_username>/qbittorrent/downloads:/media:ro \
+  --restart unless-stopped \
+  ghcr.io/yeahzero/mediainfowebui:latest
+
+# WSL 本地部署（使用端口映射）
+docker run -d --name mediainfo --privileged -p 28888:28888 \
+  -e TZ=Asia/Shanghai -e PORT=28888 -e REQUEST_TIMEOUT=30m \
+  -e MEDIAINFO_BIN=/usr/bin/mediainfo \
+  -v /home/<your_username>/qbittorrent/downloads:/media:ro \
+  --restart unless-stopped \
+  ghcr.io/yeahzero/mediainfowebui:latest
+```
+
+#### 方式三：Docker Compose 部署
+
+使用项目提供的 docker-compose.yml 文件，适合更复杂的配置：
+
+```bash
+# 复制环境变量示例文件
+cp .env.example .env
+
+# 编辑 .env 文件，配置媒体路径和其他参数
+
+# 启动服务
+docker-compose up -d
+```
+
+#### 方式四：本地构建并运行
+
+参考下方的"本地构建运行"部分。
+
+### 本地构建运行
+
+```bash
+# 克隆仓库
+git clone https://github.com/YEAHZERO/MediaInfoWebUI.git
+cd MediaInfoWebUI
+
+# 使用 Makefile 构建（推荐）
+make build-native
+
+# 或者手动构建（需 CGO + libplacebo-dev）
+cd webui && npm install && npm run build
+cd .. && CGO_ENABLED=1 go build -tags native -ldflags="-s -w" -o mediainfo ./cmd/mediainfo
+
+# 运行
+./mediainfo
+```
+
+### 浏览器强制刷新
+
+如果修改前端后看不到文件列表，请尝试强制刷新浏览器缓存：
+
+- Windows/Linux: `Ctrl + Shift + R`
+- Mac: `Cmd + Shift + R`
 
 ### 部署配置参考
 
@@ -249,15 +324,15 @@ docker run -d --name mediainfo --privileged --network host \
 | ------------------------------- | -------------------- | ----------------------------------- |
 | `PORT`                          | `28888`              | 服务端口                                |
 | `TZ`                            | `Asia/Shanghai`      | 时区                                  |
-| `REQUEST_TIMEOUT`               | `20m`                | 请求超时（大文件建议 `30m`）                   |
-| `ENGINE_TYPE`                   | `script`             | 截图引擎：`script`（脚本引擎）或 `native`（原生引擎） |
-| `ENABLE_NATIVE_ENGINE`          | `0`                  | 启用原生截图引擎（等价 `ENGINE_TYPE=native`）   |
+| `REQUEST_TIMEOUT`               | `30m`                | 请求超时（大文件建议 `30m`）                   |
+| `ENGINE_TYPE`                   | `native`             | 截图引擎：`native`（原生引擎）                 |
+| `ENABLE_NATIVE_ENGINE`          | `1`                  | 启用原生截图引擎                          |
 | `SCREENSHOT_COMPRESS_THRESHOLD` | `10485760`           | 截图压缩阈值（字节）                          |
 | `SCREENSHOT_COMPRESS_STRATEGY`  | `auto`               | 压缩策略：`lossless`/`lossy`/`auto`      |
 | `OXIPNG_BIN`                    | `oxipng`             | oxipng 路径                           |
 | `PNGQUANT_BIN`                  | `pngquant`           | pngquant 路径                         |
 | `MEDIAINFO_BIN`                 | `/usr/bin/mediainfo` | MediaInfo CLI 路径                    |
-| `MKVMERGE_BIN`                  | `mkvmerge`           | mkvmerge 路径（默认从 PATH 查找）            |
+| `MKVMERGE_BIN`                  | `mkvmerge`           | mkvmerge 路径（可选，镜像未内置需自行安装）          |
 
 ***
 
@@ -306,11 +381,8 @@ docker run -d --name mediainfo --privileged --network host \
 # 安装依赖
 go mod tidy
 
-# 脚本引擎（零 CGO 依赖）
-go build -ldflags="-s -w -X mediainfo/internal/version.Version=$(date +%Y%m%d)" -o mediainfo ./cmd/mediainfo
-
 # Native 引擎（需 CGO + libplacebo-dev）
-# CGO_ENABLED=1 go build -tags native -ldflags="-s -w" -o mediainfo ./cmd/mediainfo
+CGO_ENABLED=1 go build -tags native -ldflags="-s -w -X mediainfo/internal/version.Version=$(date +%Y%m%d)" -o mediainfo ./cmd/mediainfo
 
 # 直接运行
 export PORT=28888 MEDIA_ROOTS=/path/to/media REQUEST_TIMEOUT=30m
@@ -518,17 +590,31 @@ docker inspect mediainfo | grep Privileged
 
 ## 更新日志
 
-### [1.5.4] - 2026-05-12
+### \[1.5.5] - 2026-05-14
+
+**简化 - 移除 light 版本**
+
+- 只保留 native/latest 标签
+- 移除脚本引擎和相关脚本文件
+- 增强蓝光原盘支持（BDMV 字幕探测工具）
+- 支持 linux/amd64 和 linux/arm64 架构
+- 使用 --network=host 参数构建和部署
+- 使用标准 GitHub URL（github.com）
+
+**修复 - 版本号同步**
+
+- 修复 internal/httpapi/handlers/version.go 中 BuildVersion 与实际版本不一致的问题
+
+### \[1.5.4] - 2026-05-12
 
 **新增 - BDInfoCLI 完整集成**
 
 - **native 版本**：内置完整 BDInfoCLI（从 mirrorb/BDInfoCLI 构建），无需额外挂载
-- **light 版本**：包含 `bdinfo.sh` 脚本，支持用户自行挂载 BDInfoCLI
 - **Dockerfile 优化**：参考 minfo 项目的 BDInfo 构建流程，使用 .NET 9 SDK 编译
 
 **新增 - 镜像体积优化**
 
-- 使用 `font-wqy-zenhei`（约 16MB）替代 `font-noto-cjk`（约 100MB），节省 ~84MB
+- 使用 `font-wqy-zenhei`（约 16MB）替代 `font-noto-cjk`（约 100MB），节省 \~84MB
 - 合并 RUN 指令减少镜像层数
 - 清理 `/var/cache/apk/*`、`/usr/share/doc`、`/usr/share/man`、`/usr/share/info`
 
@@ -540,12 +626,19 @@ docker inspect mediainfo | grep Privileged
 
 **镜像大小**
 
-| 版本 | 压缩后 | 解压后 |
-|-----|-------|-------|
-| light | ~80MB | ~270MB |
-| latest (native) | ~100MB | ~340MB |
+| 版本                     | 压缩后     | 解压后     |
+| ---------------------- | ------- | ------- |
+| native/latest          | \~120MB | \~400MB |
 
-### [1.5.3] - 2026-05-12
+**优化说明**：
+
+| 优化项                                    | 节省空间   |
+| -------------------------------------- | ------ |
+| 字体替换 (font-noto-cjk → font-wqy-zenhei) | \~84MB |
+| 文档清理 (/usr/share/doc/man/info)         | \~30MB |
+| 镜像层优化                                  | \~10MB |
+
+### \[1.5.3] - 2026-05-12
 
 **新增 - 字幕对齐校准功能完全移植**
 
@@ -577,14 +670,14 @@ docker inspect mediainfo | grep Privileged
 - 所有镜像阶段（light/standard/native）均不再预安装 mkvtoolnix
 - 支持通过 `MKVMERGE_BIN` 环境变量自定义外部路径
 
-### [1.5.2] - 2026-05-12
+### \[1.5.2] - 2026-05-12
 
 **文档优化**
 
 - 更新日志优化：去除重复内容，明确说明 v1.5 前的功能记录与实际完整实现的区别
 - 版本号同步至 v1.5.2
 
-### [1.5.1] - 2026-05-12
+### \[1.5.1] - 2026-05-12
 
 **修复**
 
@@ -738,4 +831,4 @@ docker inspect mediainfo | grep Privileged
 
 ***
 
-*最后更新：2026-05-11*
+*最后更新：2026-05-13*

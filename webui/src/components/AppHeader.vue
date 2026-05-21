@@ -26,9 +26,9 @@
                             0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"
                         />
                     </svg>
-                    <span>mirrorb/minfo</span>
+                    <span>感谢 mirrorb/minfo</span>
                 </a>
-                <span v-if="version" class="version-info">{{ version.version }} ({{ formatBuildTime(version.buildTime) }})</span>
+                <span v-if="version" class="version-info">{{ formatVersion(version.version) }}</span>
             </div>
         </div>
     </header>
@@ -53,6 +53,18 @@ const formatBuildTime = (buildTime) => {
     } catch {
         return buildTime;
     }
+};
+
+const formatVersion = (version) => {
+    if (!version) {
+        return '';
+    }
+    // 只显示主版本号（如 v1.5.4），去掉多余的 git 信息
+    const match = version.match(/^v?(\d+\.\d+\.\d+)/);
+    if (match) {
+        return 'v' + match[1];
+    }
+    return 'v' + version;
 };
 </script>
 

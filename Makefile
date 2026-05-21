@@ -1,54 +1,30 @@
 # MediaInfoWebUI - Makefile
-# 本地开发：make build
-# Docker 构建：make docker-light / docker-standard / docker-native
+# 仅支持 Docker 构建，禁止本地直接编译运行 ./mediainfo
+# Docker 构建：make docker-native
 
 BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 BUILD_VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-LDFLAGS := -s -w -X mediainfo/internal/httpapi/handlers.BuildTime=$(BUILD_TIME) -X mediainfo/internal/httpapi/handlers.BuildVersion=$(BUILD_VERSION) -X mediainfo/internal/httpapi/handlers.BuildCommit=$(BUILD_COMMIT)
+PROJECT_VERSION := 1.5.5
+BUILD_ARGS := --build-arg BUILD_TIME="$(BUILD_TIME)" --build-arg BUILD_VERSION="$(BUILD_VERSION)" --build-arg BUILD_COMMIT="$(BUILD_COMMIT)" --build-arg PROJECT_VERSION="$(PROJECT_VERSION)"
+LDFLAGS := -s -w -X mediainfo/internal/httpapi/handlers.BuildTime=$(BUILD_TIME) -X mediainfo/internal/httpapi/handlers.BuildVersion=$(BUILD_VERSION) -X mediainfo/internal/httpapi/handlers.BuildCommit=$(BUILD_COMMIT) -X mediainfo/internal/version.Version=$(PROJECT_VERSION)
 
-.PHONY: build build-native webui clean
+.PHONY: webui clean docker-native push-native
 
 webui:
 	cd webui && npm install --no-audit --no-fund && npm run build
-
-build: webui
-	CGO_ENABLED=0 go build -trimpath -ldflags="$(LDFLAGS)" -o mediainfo ./cmd/mediainfo
-
-build-native: webui
-	CGO_ENABLED=1 go build -trimpath -tags native -ldflags="$(LDFLAGS)" -o mediainfo ./cmd/mediainfo
-
-run: build
-	./mediainfo
-
-run-native: build-native
-	./mediainfo
 
 clean:
 	rm -f mediainfo
 	rm -rf webui/dist
 
-docker-light:
-	docker build --network=host --target runtime-light -t mediainfowebui:light .
-
-docker-standard:
-	docker build --network=host --target runtime-standard -t mediainfowebui:latest .
-
+# Docker targets
 docker-native:
-	docker build --network=host --target runtime-native -t mediainfowebui:native .
+	docker build --network=host $(BUILD_ARGS) --target native -t mediainfowebui:native .
 
-docker-all: docker-light docker-standard docker-native
-
-push-light:
-	docker tag mediainfowebui:light ghcr.io/yeahzero/mediainfowebui:light
-	docker push ghcr.io/yeahzero/mediainfowebui:light
-
-push-standard:
-	docker tag mediainfowebui:latest ghcr.io/yeahzero/mediainfowebui:latest
-	docker push ghcr.io/yeahzero/mediainfowebui:latest
-
+# Push targets (to GHCR)
 push-native:
 	docker tag mediainfowebui:native ghcr.io/yeahzero/mediainfowebui:native
 	docker push ghcr.io/yeahzero/mediainfowebui:native
-
-push-all: push-light push-standard push-native
+	docker tag mediainfowebui:native ghcr.io/yeahzero/mediainfowebui:latest
+	docker push ghcr.io/yeahzero/mediainfowebui:latest

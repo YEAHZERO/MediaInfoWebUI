@@ -38,6 +38,20 @@ func ResolveScreenshotSource(ctx context.Context, input string) (string, func(),
 	}
 
 	if info.IsDir() {
+		if bdmvPath := findBDMVInSubdirs(input); bdmvPath != "" {
+			if _, ok := resolveBDMVRoot(bdmvPath); ok {
+				m2ts, err := findLargestM2TS(bdmvPath)
+				if err == nil {
+					return m2ts, func() {}, nil
+				}
+			}
+		}
+		if _, m2tsPath, err := findBDMVInNestedDirs(input); err == nil && m2tsPath != "" {
+			return m2tsPath, func() {}, nil
+		}
+		if isoPath := findISOInSubdirs(input); isoPath != "" {
+			return resolveM2TSFromMountedISO(ctx, isoPath)
+		}
 		return findVideoFile(input), func() {}, nil
 	}
 	return input, func() {}, nil
@@ -82,6 +96,24 @@ func ResolveBDInfoSource(ctx context.Context, input string) (string, func(), err
 
 	if !info.IsDir() {
 		return "", func() {}, errors.New("path must be a folder containing BDMV or ISO")
+	}
+
+	if bdmvPath := findBDMVInSubdirs(input); bdmvPath != "" {
+		if bdRoot, ok := resolveBDInfoRoot(bdmvPath); ok {
+			return bdRoot, func() {}, nil
+		}
+	}
+
+	bdmvPath, m2tsPath, err := findBDMVInNestedDirs(input)
+	if err == nil && bdmvPath != "" {
+		if m2tsPath != "" {
+			return m2tsPath, func() {}, nil
+		}
+		return bdmvPath, func() {}, nil
+	}
+
+	if isoPath := findISOInSubdirs(input); isoPath != "" {
+		return resolveBDInfoFromMountedISO(ctx, isoPath)
 	}
 
 	return "", func() {}, errors.New("path does not contain BDMV or BDISO content")
@@ -323,6 +355,76 @@ func findBDMVInSubdirs(root string) string {
 		return nil
 	})
 	return bdmvPath
+}
+
+func findBDMVInNestedDirs(root string) (string, string, error) {
+	var bestBDMVPath string
+	var bestM2TSPath string
+	var bestM2TSSize int64
+
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !d.IsDir() {
+			return nil
+		}
+		if !strings.EqualFold(d.Name(), "BDMV") {
+			return nil
+		}
+
+		bdmvRoot := path
+		streamDir := filepath.Join(path, "STREAM")
+		if info, err := os.Stat(streamDir); err == nil && info.IsDir() {
+			m2ts, m2tsSize, err := findLargestM2TSWithSize(streamDir)
+			if err == nil && m2tsSize > bestM2TSSize {
+				bestM2TSSize = m2tsSize
+				bestM2TSPath = m2ts
+				bestBDMVPath = bdmvRoot
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return "", "", err
+	}
+
+	if bestBDMVPath == "" {
+		return "", "", fmt.Errorf("no BDMV directory found in nested structure")
+	}
+
+	return bestBDMVPath, bestM2TSPath, nil
+}
+
+func findLargestM2TSWithSize(root string) (string, int64, error) {
+	var largestPath string
+	var largestSize int64
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.EqualFold(filepath.Ext(path), ".m2ts") {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if info.Size() > largestSize {
+			largestSize = info.Size()
+			largestPath = path
+		}
+		return nil
+	})
+	if err != nil {
+		return "", 0, err
+	}
+	if largestPath == "" {
+		return "", 0, fmt.Errorf("no m2ts files found")
+	}
+	return largestPath, largestSize, nil
 }
 
 func findISOInSubdirs(root string) string {

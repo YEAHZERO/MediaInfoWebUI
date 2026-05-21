@@ -1,27 +1,50 @@
 services:
+  bdinfo-builder:
+    image: mcr.microsoft.com/dotnet/sdk:9.0-alpine
+    container_name: bdinfo-builder
+    entrypoint: /scripts/build-bdinfo.sh
+    network_mode: host
+    environment:
+      ALPINE_MIRROR: mirrors.aliyun.com
+      GITHUB_MIRROR: https://githubfast.com
+      no_proxy: "*"
+    volumes:
+      - bdinfo-data:/shared
+      - ./scripts:/scripts:ro
+    restart: "no"
+
   mediainfo:
-    image: ${MEDIAINFO_IMAGE:-mediainfo-local}
-    container_name: ${MEDIAINFO_CONTAINER_NAME:-mediainfo-local}
+    image: ghcr.io/yeahzero/mediainfowebui:latest
+    container_name: mediainfo
     build:
       context: .
-      target: ${BUILD_TARGET:-runtime-standard}
+      target: native
       args:
-        HTTP_PROXY: "${HTTP_PROXY:-}"
-        HTTPS_PROXY: "${HTTPS_PROXY:-}"
-        http_proxy: "${http_proxy:-}"
-        https_proxy: "${https_proxy:-}"
+        ALPINE_MIRROR: mirrors.aliyun.com
+        NPM_REGISTRY: https://registry.npmmirror.com
+    depends_on:
+      bdinfo-builder:
+        condition: service_completed_successfully
     privileged: true
     ports:
-      - "${HOST_PORT:-28888}:${PORT:-28888}"
+      - "28888:28888"
     environment:
-      PORT: "${PORT:-28888}"
-      REQUEST_TIMEOUT: "${REQUEST_TIMEOUT:-20m}"
-      ENGINE_TYPE: "${ENGINE_TYPE:-script}"
-      WEB_USERNAME: "${WEB_USERNAME:-}"
-      WEB_PASSWORD: "${WEB_PASSWORD:-}"
+      TZ: "Asia/Shanghai"
+      PORT: "28888"
+      REQUEST_TIMEOUT: "30m"
+      MEDIAINFO_BIN: "/usr/bin/mediainfo"
+      ENGINE_TYPE: "native"
+      ENABLE_NATIVE_ENGINE: "1"
     volumes:
       - /lib/modules:/lib/modules:ro
-      - ${MEDIA_PATH_1:-/path/to/your/media}:/media_path1:ro
-      # - ${MEDIA_PATH_2:-./test-media2}:/media_path2:ro
-      # - ${MEDIA_PATH_3:-./test-media3}:/media_path3:ro
+      - ${MEDIA_PATH:-/path/to/your/media}:/media:ro
+      - bdinfo-data:/opt/bdinfo:ro
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:28888/api/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  bdinfo-data:

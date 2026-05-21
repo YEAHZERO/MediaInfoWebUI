@@ -29,7 +29,7 @@ func GetSubtitleHandler(ctx context.Context, ffprobe, sourcePath, subtitleMode s
 		return &PGSSubtitleHandler{}, idx
 	case "text":
 		idx := DetectSubtitleRelativeIndex(ctx, ffprobe, sourcePath)
-		return &TextSubtitleHandler{}, idx
+		return &TextSubtitleHandler{SourcePath: sourcePath}, idx
 	default:
 		return &NoSubtitleHandler{}, -1
 	}
@@ -46,13 +46,15 @@ func NormalizeSubtitleMode(mode string) string {
 	}
 }
 
-type TextSubtitleHandler struct{}
+type TextSubtitleHandler struct {
+	SourcePath string
+}
 
 func (h *TextSubtitleHandler) BuildFilterChain(time float64, subtitleIndex int) string {
 	if subtitleIndex < 0 {
 		return ""
 	}
-	return fmt.Sprintf("subtitles=input.mkv:si=%d", subtitleIndex)
+	return fmt.Sprintf("subtitles=%s:si=%d", h.SourcePath, subtitleIndex)
 }
 
 func (h *TextSubtitleHandler) BuildOutputArgs(outputDir, filename string) []string {

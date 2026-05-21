@@ -41,13 +41,24 @@ export function getEntryName(value) {
 export function buildEntries(items) {
     const result = [];
     for (const raw of items) {
-        if (typeof raw !== "string" || raw.trim() === "") {
+        if (!raw) {
             continue;
         }
-        const isDir = raw.endsWith("/") || raw.endsWith("\\");
+        let path, isDir;
+        if (typeof raw === "string") {
+            if (raw.trim() === "") continue;
+            path = cleanPath(raw);
+            isDir = raw.endsWith("/") || raw.endsWith("\\");
+        } else if (typeof raw.path === "string") {
+            path = cleanPath(raw.path);
+            isDir = raw.isDir === true;
+        } else {
+            continue;
+        }
+        if (!path) continue;
         result.push({
-            path: cleanPath(raw),
-            name: getEntryName(raw),
+            path,
+            name: getEntryName(path),
             isDir,
         });
     }

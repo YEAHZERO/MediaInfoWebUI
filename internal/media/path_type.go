@@ -78,6 +78,52 @@ func hasBDMV(dir string) bool {
 	if info, err := os.Stat(bdmv); err == nil && info.IsDir() {
 		return true
 	}
+	if hasBDMVSubdir(dir) {
+		return true
+	}
+	if findBDMVUpward(dir) {
+		return true
+	}
+	return false
+}
+
+func findBDMVUpward(dir string) bool {
+	current := dir
+	for {
+		parent := filepath.Dir(current)
+		if parent == current || parent == "/" || parent == "." {
+			break
+		}
+		bdmv := filepath.Join(parent, "BDMV")
+		if info, err := os.Stat(bdmv); err == nil && info.IsDir() {
+			return true
+		}
+		current = parent
+	}
+	return false
+}
+
+func hasBDMVSubdir(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		sub := filepath.Join(dir, e.Name())
+		bdmv := filepath.Join(sub, "BDMV")
+		if info, err := os.Stat(bdmv); err == nil && info.IsDir() {
+			return true
+		}
+		if strings.EqualFold(e.Name(), "BDMV") {
+			stream := filepath.Join(sub, "STREAM")
+			if info, err := os.Stat(stream); err == nil && info.IsDir() {
+				return true
+			}
+		}
+	}
 	return false
 }
 

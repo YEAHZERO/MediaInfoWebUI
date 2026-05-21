@@ -36,13 +36,15 @@ type OutputFormat interface {
 	CodecArgs() []string
 }
 
-type textSubtitleHandler struct{}
+type textSubtitleHandler struct {
+	sourcePath string
+}
 
 func (h *textSubtitleHandler) BuildFilterChain(time float64, subtitleIndex int) string {
 	if subtitleIndex < 0 {
 		return ""
 	}
-	return fmt.Sprintf("subtitles=input.mkv:si=%d", subtitleIndex)
+	return fmt.Sprintf("subtitles=%s:si=%d", h.sourcePath, subtitleIndex)
 }
 
 func (h *textSubtitleHandler) BuildOutputArgs(outputDir, filename string) []string {
@@ -137,6 +139,13 @@ func newNativeEngine() *nativeEngine {
 	return &nativeEngine{}
 }
 
+func (e *nativeEngine) newSubtitleHandler(subtitleType, sourcePath string) SubtitleHandler {
+	if subtitleType == "text" {
+		return &textSubtitleHandler{sourcePath: sourcePath}
+	}
+	return subtitleHandlers[subtitleType]
+}
+
 func (e *nativeEngine) Capture(ctx context.Context, opts CaptureOptions) (*CaptureResult, error) {
 	hb := startHeartbeat(opts.OnProgress)
 
@@ -172,7 +181,7 @@ func (e *nativeEngine) Capture(ctx context.Context, opts CaptureOptions) (*Captu
 
 	subtitleType, subtitleIndex := e.detectSubtitleWithIndex(ctx, sourcePath, ffprobe)
 
-	handler := subtitleHandlers[subtitleType]
+	handler := e.newSubtitleHandler(subtitleType, sourcePath)
 	if opts.SubtitleMode == SubtitleModeOff {
 		handler = &noSubtitleHandler{}
 		subtitleIndex = -1
