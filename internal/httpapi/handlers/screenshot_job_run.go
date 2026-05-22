@@ -4,9 +4,8 @@ import (
 	"context"
 	"os"
 	"strings"
-	"time"
 
-	"mediainfo/internal/config"
+	"mediainfo/internal/filelogger"
 	"mediainfo/internal/httpapi/transport"
 	"mediainfo/internal/screenshot"
 )
@@ -26,18 +25,22 @@ func (j *screenshotJob) run() {
 		}
 	}()
 
+	filelogger.Log(filelogger.Screenshots, "[%s] 开始任务: path=%s mode=%s host=%s count=%d", j.id, j.inputPath, j.mode, j.host, j.count)
+
 	if !j.beginRun() {
+		filelogger.Log(filelogger.Screenshots, "[%s] 任务取消或重复", j.id)
 		if j.isCancellationRequested() {
 			j.finishCanceled()
 		}
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(j.taskContext, config.RequestTimeout)
+	ctx, cancel := context.WithCancel(j.taskContext)
 	defer cancel()
 
 	tempDir, err := createScreenshotTempDir("mediainfo-screenshot-job-*")
 	if err != nil {
+		filelogger.Log(filelogger.Screenshots, "[%s] 创建临时目录失败: %s", j.id, err.Error())
 		j.fail(err)
 		return
 	}
@@ -45,28 +48,34 @@ func (j *screenshotJob) run() {
 
 	switch j.mode {
 	case screenshot.ModeLinks:
+		filelogger.Log(filelogger.Screenshots, "[%s] 图床模式: host=%s", j.id, j.host)
 		result, err := screenshot.RunUploadWithLogs(ctx, j.inputPath, tempDir, j.variant, j.subtitleMode, j.host, j.count)
 		if err != nil {
+			filelogger.Log(filelogger.Screenshots, "[%s] 失败: %s", j.id, err.Error())
 			if result.Logs != "" {
 				j.logger.LogLine(result.Logs)
 			}
 			j.fail(err)
 			return
 		}
+		filelogger.Log(filelogger.Screenshots, "[%s] 成功: 生成了 %d 个链接", j.id, len(parseUploadLinks(result.Output)))
 		if result.Logs != "" {
 			j.logger.LogLine(result.Logs)
 		}
 		linkItems := parseUploadLinks(result.Output)
 		j.succeed(result.Output, "", linkItems, nil, nil)
 	default:
+		filelogger.Log(filelogger.Screenshots, "[%s] 下载模式", j.id)
 		downloadURL, logs, _, err := prepareScreenshotZipDownload(ctx, j.inputPath, tempDir, j.variant, j.subtitleMode, j.count)
 		if err != nil {
+			filelogger.Log(filelogger.Screenshots, "[%s] 打包下载失败: %s", j.id, err.Error())
 			if logs != "" {
 				j.logger.LogLine(logs)
 			}
 			j.fail(err)
 			return
 		}
+		filelogger.Log(filelogger.Screenshots, "[%s] 打包下载成功", j.id)
 		if logs != "" {
 			j.logger.LogLine(logs)
 		}
@@ -99,13 +108,4 @@ func createScreenshotTempDir(pattern string) (string, error) {
 }
 
 func (j *screenshotJob) appendLinkItem(item interface{}) {
-}
-
-func contextWithCancel(ctx context.Context) (context.Context, context.CancelFunc) {
-	return context.WithCancel(ctx)
-}
-
-func _() {
-	_ = time.Second
-	_ = config.RequestTimeout
 }

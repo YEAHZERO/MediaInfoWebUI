@@ -1,58 +1,24 @@
 <template>
     <div class="bdinfo-panel">
-        <div class="bdinfo-header-row">
-            <div class="bdinfo-tabs">
-                <button
-                    type="button"
-                    class="ghost tab-btn"
-                    :class="{ active: activeTab === 'scan' }"
-                    :disabled="busy"
-                    @click="activeTab = 'scan'"
-                >
-                    扫描
-                </button>
-                <button
-                    type="button"
-                    class="ghost tab-btn"
-                    :class="{ active: activeTab === 'history' }"
-                    :disabled="busy"
-                    @click="activeTab = 'history'"
-                >
-                    历史
-                </button>
-            </div>
-            <div v-if="activeTab === 'scan'" class="scan-mode">
-                <label class="field-label-muted">扫描模式</label>
-                <div class="variant-picker">
-                    <button
-                        type="button"
-                        class="ghost variant-option"
-                        :class="{ active: scanMode === 'auto' }"
-                        :disabled="busy"
-                        @click="scanMode = 'auto'"
-                    >
-                        智能推荐
-                    </button>
-                    <button
-                        type="button"
-                        class="ghost variant-option"
-                        :class="{ active: scanMode === 'playlists' }"
-                        :disabled="busy"
-                        @click="handleManualMode"
-                    >
-                        手动选取
-                    </button>
-                    <button
-                        type="button"
-                        class="ghost variant-option"
-                        :class="{ active: scanMode === 'whole' }"
-                        :disabled="busy"
-                        @click="scanMode = 'whole'"
-                    >
-                        完整扫描
-                    </button>
-                </div>
-            </div>
+        <div class="bdinfo-tabs">
+            <button
+                type="button"
+                class="ghost tab-btn"
+                :class="{ active: activeTab === 'scan' }"
+                :disabled="busy"
+                @click="activeTab = 'scan'"
+            >
+                扫描
+            </button>
+            <button
+                type="button"
+                class="ghost tab-btn"
+                :class="{ active: activeTab === 'history' }"
+                :disabled="busy"
+                @click="activeTab = 'history'"
+            >
+                历史
+            </button>
         </div>
 
         <div v-if="activeTab === 'scan'" class="bdinfo-scan">
@@ -74,19 +40,6 @@
                     @deselect-all="deselectAllPlaylists"
                     @select-recommended="selectRecommended"
                 />
-            </div>
-
-            <div class="scan-actions">
-                <button
-                    type="button"
-                    class="action-btn"
-                    :class="{ loading: loading }"
-                    :disabled="busy || loading || !hasInput"
-                    @click="handleStartScan"
-                >
-                    <span v-if="loading" class="action-btn-spinner"></span>
-                    <span>{{ loading ? "创建中..." : "开始扫描" }}</span>
-                </button>
             </div>
 
             <div v-if="hasActiveJob" class="active-job-section">
@@ -137,9 +90,10 @@ const props = defineProps({
     path: { type: String, default: "" },
     hasInput: { type: Boolean, default: false },
     busy: { type: Boolean, default: false },
+    scanMode: { type: String, default: "auto" },
 });
 
-const emit = defineEmits(["notice", "busy-change"]);
+const emit = defineEmits(["notice", "busy-change", "update:scanMode"]);
 
 const activeTab = ref("scan");
 const showReport = ref(false);
@@ -151,7 +105,6 @@ const {
     playlists,
     recommendation,
     selectedPlaylists,
-    scanMode,
     loading,
     loadingPlaylists,
     wsConnected,
@@ -170,15 +123,8 @@ watch(loading, (val) => {
     emit("busy-change", val);
 });
 
-const handleManualMode = async () => {
-    scanMode.value = "playlists";
-    if (playlists.value.length === 0) {
-        await loadPlaylists();
-    }
-};
-
 const handleStartScan = async () => {
-    const job = await startJob();
+    const job = await startJob(props.scanMode);
     if (job) {
         emit("notice", "任务已创建");
         activeTab.value = "history";
@@ -218,4 +164,6 @@ const copyReport = async () => {
         emit("notice", "复制失败");
     }
 };
+
+defineExpose({ startScan: handleStartScan, loading });
 </script>

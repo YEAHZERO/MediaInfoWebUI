@@ -32,6 +32,7 @@ func NewHandler(assets fs.FS) http.Handler {
 	mux.HandleFunc("/api/info-jobs/", handlers.InfoJobHandler)
 	mux.HandleFunc("/api/screenshot-jobs", handlers.ScreenshotJobsHandler)
 	mux.HandleFunc("/api/screenshot-jobs/", handlers.ScreenshotJobHandler)
+	mux.HandleFunc("/api/logs/download", handlers.DownloadLogsHandler)
 
 	return middleware.Logging(middleware.Authenticate(mux))
 }

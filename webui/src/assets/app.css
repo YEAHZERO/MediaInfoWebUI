@@ -36,7 +36,7 @@ body {
 }
 
 .shell {
-  max-width: 1100px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 48px 32px 64px;
   display: grid;
@@ -169,21 +169,29 @@ h1 {
 }
 
 .config-grid {
-  display: flex;
-  gap: 20px;
+  display: grid;
+  gap: 18px;
   padding: 18px;
   border-radius: 16px;
   background: rgba(47, 111, 109, 0.05);
   border: 1px solid rgba(47, 111, 109, 0.1);
-  align-items: flex-start;
 }
 
-.config-left,
-.config-right {
-  flex: 1;
+.field-pair {
   display: grid;
-  gap: 18px;
-  min-width: 0;
+  gap: 8px;
+}
+
+.pair-labels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.pair-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
 }
 
 .config-grid .field {
@@ -354,16 +362,16 @@ input[type="number"] {
 
 .actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 12px;
 }
 
 .action-btn {
-  min-width: 148px;
+  min-width: 120px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   white-space: nowrap;
 }
 
@@ -378,6 +386,17 @@ input[type="number"] {
   border: 2px solid rgba(255, 255, 255, 0.3);
   border-top-color: rgba(255, 255, 255, 0.95);
   animation: spin 0.8s linear infinite;
+}
+
+.scan-btn-compact {
+  justify-self: start;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .variant-picker {
@@ -620,8 +639,8 @@ pre {
 .bdinfo-header-row {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
-  flex-wrap: wrap;
+  gap: 20px;
+  flex-wrap: nowrap;
   margin-bottom: 12px;
 }
 
@@ -666,7 +685,7 @@ pre {
 .scan-mode {
   display: grid;
   gap: 10px;
-  margin-top: 4px;
+  margin-bottom: 12px;
 }
 
 .playlist-section {

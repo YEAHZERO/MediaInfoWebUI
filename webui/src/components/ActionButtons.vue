@@ -20,6 +20,9 @@
             <span v-if="activeAction === 'output-links'" class="action-btn-spinner"></span>
             <span>{{ activeAction === "output-links" ? "生成中..." : "生成图床链接" }}</span>
         </button>
+        <button class="action-btn action-btn-secondary" :disabled="busy" @click="$emit('download-logs')">
+            <span>下载日志</span>
+        </button>
     </div>
 </template>
 
@@ -30,5 +33,5 @@ defineProps({
     hasInput: { type: Boolean, required: true },
 });
 
-defineEmits(["mediainfo", "bdinfo", "mkvmerge-tracks", "download-shots", "output-links"]);
+defineEmits(["mediainfo", "bdinfo", "mkvmerge-tracks", "download-shots", "output-links", "download-logs"]);
 </script>

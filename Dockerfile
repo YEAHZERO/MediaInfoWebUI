@@ -63,11 +63,11 @@ ENV BUILD_COMMIT=${BUILD_COMMIT}
 ENV PROJECT_VERSION=${PROJECT_VERSION}
 
 RUN set -eux; \
+    apk add --no-cache tzdata gcc musl-dev; \
     BUILD_TIME_FINAL="${BUILD_TIME}"; \
     if [ -z "$BUILD_TIME_FINAL" ]; then \
         BUILD_TIME_FINAL=$(TZ=Asia/Shanghai date +%Y-%m-%dT%H:%M:%S+08:00); \
     fi; \
-    apk add --no-cache gcc musl-dev; \
     GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -buildvcs=false -tags "native websocket" \
         -ldflags="-s -w \
             -X mediainfo/internal/httpapi/handlers.BuildTime=${BUILD_TIME_FINAL} \

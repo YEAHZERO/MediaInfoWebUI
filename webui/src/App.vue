@@ -24,21 +24,59 @@
                     <label>配置</label>
                 </div>
                 <div class="config-grid">
-                    <div class="config-left">
-                        <div class="field">
+                    <div class="field-pair">
+                        <div class="pair-labels">
                             <label class="field-label-muted">生成 BDInfo</label>
+                            <label class="field-label-muted">BDInfo 高级</label>
+                        </div>
+                        <div class="pair-content">
                             <BDInfoOutputPicker v-model="bdinfoMode" :busy="busy" />
+                            <BDInfoPanel
+                                ref="bdinfoPanelRef"
+                                :path="path"
+                                :has-input="hasInput"
+                                :busy="busy"
+                                :scan-mode="bdinfoScanMode"
+                                @notice="showNotice"
+                                @busy-change="handleBDInfoBusyChange"
+                            />
                         </div>
-                        <div class="field">
+                    </div>
+                    <div class="field-pair">
+                        <div class="pair-labels">
                             <label class="field-label-muted">截图模式</label>
+                            <label class="field-label-muted">扫描模式</label>
+                        </div>
+                        <div class="pair-content">
                             <ScreenshotVariantPicker v-model="screenshotVariant" :busy="busy" />
+                            <BDInfoScanModePicker v-model="bdinfoScanMode" :busy="busy" />
                         </div>
-                        <div class="field">
+                    </div>
+                    <div class="field-pair">
+                        <div class="pair-labels">
                             <label class="field-label-muted">字幕处理</label>
-                            <ScreenshotSubtitleModePicker v-model="screenshotSubtitleMode" :busy="busy" />
+                            <label class="field-label-muted">开始扫描</label>
                         </div>
-                        <div class="field">
+                        <div class="pair-content">
+                            <ScreenshotSubtitleModePicker v-model="screenshotSubtitleMode" :busy="busy" />
+                            <button
+                                type="button"
+                                class="scan-btn-compact"
+                                :class="{ loading: bdinfoPanelRef?.loading }"
+                                :disabled="busy || bdinfoPanelRef?.loading || !hasInput"
+                                @click="bdinfoPanelRef?.startScan()"
+                            >
+                                <span v-if="bdinfoPanelRef?.loading" class="action-btn-spinner"></span>
+                                <span>{{ bdinfoPanelRef?.loading ? "创建中..." : "开始扫描" }}</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="field-pair">
+                        <div class="pair-labels">
                             <label for="screenshot-count" class="field-label-muted">截图数量</label>
+                            <label class="field-label-muted">图床选择</label>
+                        </div>
+                        <div class="pair-content">
                             <input
                                 id="screenshot-count"
                                 class="config-number-input"
@@ -52,21 +90,6 @@
                                 @input="handleScreenshotCountInput"
                                 @blur="handleScreenshotCountBlur"
                             />
-                        </div>
-                    </div>
-                    <div class="config-right">
-                        <div class="field field-full">
-                            <label class="field-label-muted">BDInfo 高级</label>
-                            <BDInfoPanel
-                                :path="path"
-                                :has-input="hasInput"
-                                :busy="busy"
-                                @notice="showNotice"
-                                @busy-change="handleBDInfoBusyChange"
-                            />
-                        </div>
-                        <div class="field">
-                            <label class="field-label-muted">图床选择</label>
                             <ScreenshotHostPicker v-model="screenshotHost" :busy="busy" />
                         </div>
                     </div>
@@ -78,15 +101,16 @@
                     <label>操作</label>
                 </div>
                 <ActionButtons
-                    :busy="busy"
-                    :active-action="activeAction"
-                    :has-input="hasInput"
-                    @mediainfo="runInfo('/api/mediainfo', 'MediaInfo', {}, 'mediainfo')"
-                    @bdinfo="runInfo('/api/bdinfo', 'BDInfo', { bdinfo_mode: bdinfoMode }, 'bdinfo')"
-                    @mkvmerge-tracks="runInfo('/api/mkvmerge/tracks', 'MKVMerge 轨道信息', {}, 'mkvmerge-tracks')"
-                    @download-shots="downloadShots"
-                    @output-links="outputShotLinks"
-                />
+                        :busy="busy"
+                        :active-action="activeAction"
+                        :has-input="hasInput"
+                        @mediainfo="runInfo('/api/mediainfo', 'MediaInfo', {}, 'mediainfo')"
+                        @bdinfo="runInfo('/api/bdinfo', 'BDInfo', { bdinfo_mode: bdinfoMode }, 'bdinfo')"
+                        @mkvmerge-tracks="runInfo('/api/mkvmerge/tracks', 'MKVMerge 轨道信息', {}, 'mkvmerge-tracks')"
+                        @download-shots="downloadShots"
+                        @output-links="outputShotLinks"
+                        @download-logs="downloadLogs"
+                    />
             </div>
         </section>
 
@@ -124,6 +148,7 @@ import ActionButtons from "./components/ActionButtons.vue";
 import AppHeader from "./components/AppHeader.vue";
 import BDInfoOutputPicker from "./components/BDInfoOutputPicker.vue";
 import BDInfoPanel from "./components/BDInfoPanel.vue";
+import BDInfoScanModePicker from "./components/BDInfoScanModePicker.vue";
 import ImageLinksPanel from "./components/ImageLinksPanel.vue";
 import NoticeToast from "./components/NoticeToast.vue";
 import OutputPanel from "./components/OutputPanel.vue";
@@ -142,6 +167,8 @@ const screenshotCount = ref(persistedState.screenshotCount || 4);
 const screenshotSubtitleMode = ref(persistedState.screenshotSubtitleMode);
 const screenshotHost = ref(persistedState.screenshotHost || "pixhost");
 const bdinfoMode = ref(persistedState.bdinfoMode);
+const bdinfoScanMode = ref(persistedState.bdinfoScanMode || "auto");
+const bdinfoPanelRef = ref(null);
 const versionInfo = ref(null);
 const lastBuildTime = ref(localStorage.getItem('lastBuildTime') || '');
 
@@ -228,6 +255,26 @@ const handleBDInfoBusyChange = (isBusy) => {
     bdinfoBusy.value = isBusy;
 };
 
+const downloadLogs = async () => {
+    try {
+        const response = await fetch("/api/logs/download");
+        if (!response.ok) {
+            throw new Error("下载日志失败");
+        }
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "mediainfo-logs.txt";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    } catch (error) {
+        showNotice("下载日志失败: " + error.message);
+    }
+};
+
 const checkBuildVersion = async () => {
     try {
         const version = await fetchVersionInfo();
@@ -250,8 +297,8 @@ onMounted(() => {
 });
 
 watch(
-    [path, browserDir, screenshotVariant, screenshotCount, screenshotSubtitleMode, screenshotHost, bdinfoMode],
-    ([nextPath, nextBrowserDir, nextVariant, nextCount, nextSubtitleMode, nextHost, nextBDInfoMode]) => {
+    [path, browserDir, screenshotVariant, screenshotCount, screenshotSubtitleMode, screenshotHost, bdinfoMode, bdinfoScanMode],
+    ([nextPath, nextBrowserDir, nextVariant, nextCount, nextSubtitleMode, nextHost, nextBDInfoMode, nextBDInfoScanMode]) => {
         saveAppState({
             path: nextPath,
             browserDir: nextBrowserDir,
@@ -260,6 +307,7 @@ watch(
             screenshotSubtitleMode: nextSubtitleMode,
             screenshotHost: nextHost,
             bdinfoMode: nextBDInfoMode,
+            bdinfoScanMode: nextBDInfoScanMode,
         });
     },
     { deep: true, immediate: true },

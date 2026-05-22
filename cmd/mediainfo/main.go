@@ -5,10 +5,14 @@ import (
 
 	"mediainfo"
 	"mediainfo/internal/app"
+	"mediainfo/internal/filelogger"
 	"mediainfo/internal/version"
 )
 
 func main() {
+	filelogger.SetLogsDir("logs")
+	defer filelogger.CloseAll()
+
 	server, err := app.NewServer(mediainfo.EmbeddedWebUI())
 	if err != nil {
 		log.Fatal(err)
