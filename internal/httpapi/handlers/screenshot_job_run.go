@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"strings"
+	"time"
 
 	"mediainfo/internal/filelogger"
 	"mediainfo/internal/httpapi/transport"
@@ -12,6 +13,7 @@ import (
 
 func (j *screenshotJob) run() {
 	screenshotJobSem <- struct{}{}
+	jobStart := time.Now()
 	defer func() {
 		<-screenshotJobSem
 		if j.cancel != nil {
@@ -60,7 +62,7 @@ func (j *screenshotJob) run() {
 
 	tempDir, err := createScreenshotTempDir("mediainfo-screenshot-job-*")
 	if err != nil {
-		filelogger.Log(filelogger.Screenshots, "[%s] 失败: 创建临时目录 - %s", j.id, err.Error())
+		filelogger.Log(filelogger.Screenshots, "[%s] 失败: 创建临时目录 - %s | 耗时=%s", j.id, err.Error(), time.Since(jobStart))
 		j.fail(err)
 		return
 	}
@@ -71,7 +73,7 @@ func (j *screenshotJob) run() {
 		filelogger.Log(filelogger.Screenshots, "[%s] 开始截图并上传至: %s", j.id, j.host)
 		result, err := screenshot.RunUploadWithLogs(ctx, j.inputPath, tempDir, j.variant, j.subtitleMode, j.host, j.count)
 		if err != nil {
-			filelogger.Log(filelogger.Screenshots, "[%s] 失败: %s", j.id, err.Error())
+			filelogger.Log(filelogger.Screenshots, "[%s] 失败: %s | 耗时=%s", j.id, err.Error(), time.Since(jobStart))
 			if result.Logs != "" {
 				filelogger.Log(filelogger.Screenshots, "[%s] 截图详情:\n%s", j.id, result.Logs)
 			}
@@ -82,7 +84,7 @@ func (j *screenshotJob) run() {
 			return
 		}
 		links := parseUploadLinks(result.Output)
-		filelogger.Log(filelogger.Screenshots, "[%s] 成功: 截图 %d 张 | 上传 %d 个链接", j.id, j.count, len(links))
+		filelogger.Log(filelogger.Screenshots, "[%s] 成功: 截图 %d 张 | 上传 %d 个链接 | 耗时=%s", j.id, j.count, len(links), time.Since(jobStart))
 		if result.Logs != "" && j.logger != nil {
 			j.logger.LogLine(result.Logs)
 		}
@@ -92,7 +94,7 @@ func (j *screenshotJob) run() {
 		filelogger.Log(filelogger.Screenshots, "[%s] 开始截图并打包下载", j.id)
 		downloadURL, logs, _, err := prepareScreenshotZipDownload(ctx, j.inputPath, tempDir, j.variant, j.subtitleMode, j.count)
 		if err != nil {
-			filelogger.Log(filelogger.Screenshots, "[%s] 失败: %s", j.id, err.Error())
+			filelogger.Log(filelogger.Screenshots, "[%s] 失败: %s | 耗时=%s", j.id, err.Error(), time.Since(jobStart))
 			if logs != "" {
 				filelogger.Log(filelogger.Screenshots, "[%s] 截图详情:\n%s", j.id, logs)
 			}
@@ -102,7 +104,7 @@ func (j *screenshotJob) run() {
 			j.fail(err)
 			return
 		}
-		filelogger.Log(filelogger.Screenshots, "[%s] 成功: 截图 %d 张 | 打包完成", j.id, j.count)
+		filelogger.Log(filelogger.Screenshots, "[%s] 成功: 截图 %d 张 | 打包完成 | 耗时=%s", j.id, j.count, time.Since(jobStart))
 		if logs != "" && j.logger != nil {
 			j.logger.LogLine(logs)
 		}

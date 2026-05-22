@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"mediainfo/internal/config"
 	"mediainfo/internal/filelogger"
@@ -13,6 +14,7 @@ import (
 )
 
 func (j *infoJob) run() {
+	jobStart := time.Now()
 	defer func() {
 		if j.cancel != nil {
 			j.cancel()
@@ -40,7 +42,7 @@ func (j *infoJob) run() {
 		filelogger.Log(filelogger.MediaInfo, "[%s] 点击: 生成 MediaInfo | 输入: %s", j.id, j.inputPath)
 		bin, err := system.ResolveBin("MEDIAINFO_BIN", "mediainfo")
 		if err != nil {
-			filelogger.Log(filelogger.MediaInfo, "[%s] 失败: 未找到可执行文件 - %s", j.id, err.Error())
+			filelogger.Log(filelogger.MediaInfo, "[%s] 失败: 未找到可执行文件 - %s | 耗时=%s", j.id, err.Error(), time.Since(jobStart))
 			j.logger.Logf("[mediainfo] 未找到可执行文件: %s", err.Error())
 			j.fail(err)
 			return
@@ -51,11 +53,11 @@ func (j *infoJob) run() {
 
 		output, err := runMediaInfoJob(ctx, j.inputPath, j.logger, bin)
 		if err != nil {
-			filelogger.Log(filelogger.MediaInfo, "[%s] 失败: %s", j.id, err.Error())
+			filelogger.Log(filelogger.MediaInfo, "[%s] 失败: %s | 耗时=%s", j.id, err.Error(), time.Since(jobStart))
 			j.fail(err)
 			return
 		}
-		filelogger.Log(filelogger.MediaInfo, "[%s] 完成 | 输出长度: %d 字节", j.id, len(output))
+		filelogger.Log(filelogger.MediaInfo, "[%s] 完成 | 输出长度: %d 字节 | 耗时=%s", j.id, len(output), time.Since(jobStart))
 		j.succeed(output)
 	case infoKindBDInfo:
 		modeDesc := "完整报告"
@@ -67,11 +69,11 @@ func (j *infoJob) run() {
 		j.logger.Logf("[bdinfo] 输入路径: %s", j.inputPath)
 		output, err := runBDInfoJob(ctx, j.inputPath, j.bdinfoMode, j.logger)
 		if err != nil {
-			filelogger.Log(filelogger.BDInfo, "[%s] 失败: %s", j.id, err.Error())
+			filelogger.Log(filelogger.BDInfo, "[%s] 失败: %s | 耗时=%s", j.id, err.Error(), time.Since(jobStart))
 			j.fail(err)
 			return
 		}
-		filelogger.Log(filelogger.BDInfo, "[%s] 完成 | 模式: %s | 输出长度: %d 字节", j.id, modeDesc, len(output))
+		filelogger.Log(filelogger.BDInfo, "[%s] 完成 | 模式: %s | 输出长度: %d 字节 | 耗时=%s", j.id, modeDesc, len(output), time.Since(jobStart))
 		j.succeed(output)
 	default:
 		j.fail(errors.New("unsupported info job kind"))

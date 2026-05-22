@@ -89,12 +89,16 @@ func (r *screenshotRunner) prepareSubtitlePipeline() error {
 }
 
 func (r *screenshotRunner) prepareRenderPipeline() {
+	r.logProgress("准备", 1, 3, "正在分析画面参数。")
 	if r.media.VideoWidth == 0 || r.media.VideoHeight == 0 {
 		r.media.VideoWidth = 1920
 		r.media.VideoHeight = 1080
 	}
+	r.logProgress("准备", 2, 3, "正在分析色彩空间。")
 	r.render.ColorInfo = ""
 	r.render.ColorChain = ""
+	r.logProgress("准备", 3, 3, "正在准备截图参数。")
+	r.logProgressPercent("准备", 100, "画面参数准备完成。")
 	r.logf("[信息] 准备完成：%dx%d", r.media.VideoWidth, r.media.VideoHeight)
 }
 

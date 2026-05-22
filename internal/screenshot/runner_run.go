@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	screenshotdelivery "mediainfo/internal/screenshot/delivery"
+	screenshottimestamps "mediainfo/internal/screenshot/timestamps"
 )
 
 type screenshotRunState struct {
@@ -80,10 +81,16 @@ func (r *screenshotRunner) prepareScreenshotCapture(requested float64, state *sc
 		return screenshotCapturePlan{}, false
 	}
 
-	outputName := fmt.Sprintf("screenshot_%02d.png", state.nextShotIndex())
+	ts := int(aligned)
+	outputName := fmt.Sprintf("%dmin%02ds.png", ts/60, ts%60)
+	if ts < 60 {
+		outputName = fmt.Sprintf("%ds.png", ts)
+	}
 	outputPath := filepath.Join(r.outputDir, outputName)
-	r.logf("[信息] 截图: 请求 %.3fs → 对齐 %.3fs → 输出 %s",
-		requested, aligned, outputName,
+	r.logf("[信息] 截图: 请求 %s → 对齐 %s → 输出 %s",
+		screenshottimestamps.SecToHMSMS(requested),
+		screenshottimestamps.SecToHMSMS(aligned),
+		outputName,
 	)
 
 	current := state.beginShot()

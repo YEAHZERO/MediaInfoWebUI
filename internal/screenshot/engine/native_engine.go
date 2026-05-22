@@ -5,6 +5,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -116,7 +117,7 @@ func (f *pngFormat) Extension() string {
 func (f *pngFormat) CodecArgs() []string {
 	return []string{
 		"-vcodec", "png",
-		"-compression_level", "3",
+		"-compression_level", "1",
 	}
 }
 
@@ -140,10 +141,10 @@ func newNativeEngine() *nativeEngine {
 }
 
 func (e *nativeEngine) newSubtitleHandler(subtitleType, sourcePath string) SubtitleHandler {
-	if subtitleType == "text" {
-		return &textSubtitleHandler{sourcePath: sourcePath}
+	if subtitleType == "" {
+		return &noSubtitleHandler{}
 	}
-	return subtitleHandlers[subtitleType]
+	return &textSubtitleHandler{sourcePath: sourcePath}
 }
 
 func (e *nativeEngine) Capture(ctx context.Context, opts CaptureOptions) (*CaptureResult, error) {
@@ -193,7 +194,11 @@ func (e *nativeEngine) Capture(ctx context.Context, opts CaptureOptions) (*Captu
 	files := make([]ScreenshotFileInfo, 0, len(seconds))
 
 	for i, second := range seconds {
-		filename := fmt.Sprintf("screenshot_%02d%s", i+1, format.Extension())
+		ts := int(math.Round(second))
+		filename := fmt.Sprintf("%dmin%02ds%s", ts/60, ts%60, format.Extension())
+		if ts < 60 {
+			filename = fmt.Sprintf("%ds%s", ts, format.Extension())
+		}
 		outputPath := filepath.Join(outputDir, filename)
 
 		hb.update(PhaseCapture, i+1, opts.Count, fmt.Sprintf("capturing %d/%d at %.1fs", i+1, opts.Count, second))
@@ -206,11 +211,7 @@ func (e *nativeEngine) Capture(ctx context.Context, opts CaptureOptions) (*Captu
 		coarseHMS := formatTimestamp(coarseSecond)
 
 		var captureErr error
-		if subtitleType == "pgs" || subtitleType == "dvd" {
-			captureErr = e.captureBitmapSubtitle(ctx, ffmpeg, ffprobe, sourcePath, outputPath, second, coarseHMS, fineSecond, handler, format, csInfo)
-		} else {
-			captureErr = e.captureFrame(ctx, ffmpeg, sourcePath, outputPath, coarseHMS, fineSecond, handler, format, subtitleIndex, csInfo)
-		}
+		captureErr = e.captureFrame(ctx, ffmpeg, sourcePath, outputPath, coarseHMS, fineSecond, handler, format, subtitleIndex, csInfo)
 
 		logs.WriteString(e.captureLog(captureErr, i+1, len(seconds)))
 		if captureErr == nil {
@@ -272,7 +273,7 @@ func (e *nativeEngine) captureFrame(ctx context.Context, ffmpeg, source, output,
 
 	_, stderr, err := system.RunCommand(ctx, ffmpeg, args...)
 	if err != nil {
-		return fmt.Errorf("ffmpeg: %s", system.BestErrorMessage(err, stderr, ""))
+		return fmt.Errorf("ffmpeg 失败 | 滤镜: %s | 路径: %s | 错误: %s", filterChain, source, system.BestErrorMessage(err, stderr, ""))
 	}
 	return nil
 }
@@ -310,7 +311,7 @@ func (e *nativeEngine) captureWithLibplaceboFallback(ctx context.Context, ffmpeg
 
 	errMsg := system.BestErrorMessage(err, stderr, "")
 	if !isLibplaceboRenderCrashMessage(errMsg) {
-		return fmt.Errorf("ffmpeg: %s", errMsg)
+		return fmt.Errorf("ffmpeg 失败 | 滤镜: %s | 错误: %s", libplaceboChain, errMsg)
 	}
 
 	fallbackFilter := buildFallbackToneMappingFilter(csInfo)
@@ -331,7 +332,7 @@ func (e *nativeEngine) captureWithLibplaceboFallback(ctx context.Context, ffmpeg
 
 	_, stderr2, err2 := system.RunCommand(ctx, ffmpeg, fallbackArgs...)
 	if err2 != nil {
-		return fmt.Errorf("ffmpeg (fallback): %s", system.BestErrorMessage(err2, stderr2, ""))
+		return fmt.Errorf("ffmpeg fallback 失败 | 滤镜: %s | 错误: %s", fallbackFilter, system.BestErrorMessage(err2, stderr2, ""))
 	}
 	return nil
 }

@@ -9,7 +9,7 @@ import (
 
 	"mediainfo/internal/screenshot/engine"
 	screenshotprogress "mediainfo/internal/screenshot/progress"
-	"mediainfo/internal/screenshot/taskprogress"
+	"mediainfo/internal/taskprogress"
 )
 
 func (r *screenshotRunner) logs() string {
