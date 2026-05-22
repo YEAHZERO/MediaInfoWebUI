@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strings"
 
-	"mediainfo/internal/media"
 	"mediainfo/internal/screenshot/engine"
 	"mediainfo/internal/screenshot/hosting"
 )
@@ -66,38 +65,44 @@ func RunScript(ctx context.Context, inputPath, outputDir, variant, subtitleMode 
 }
 
 func RunScriptWithLogs(ctx context.Context, inputPath, outputDir, variant, subtitleMode string, count int) (ScriptResult, error) {
-	resolvedPath, cleanup, err := media.ResolveScreenshotSource(ctx, inputPath)
-	if err == nil {
-		defer cleanup()
-		inputPath = resolvedPath
+	var logs strings.Builder
+	onLog := func(msg string) {
+		logs.WriteString(msg)
+		logs.WriteString("\n")
 	}
 
-	capResult, err := defaultEngine.Capture(ctx, engine.CaptureOptions{
-		SourcePath:   inputPath,
-		OutputDir:    outputDir,
-		Variant:      variant,
-		SubtitleMode: subtitleMode,
-		Count:        count,
-	})
+	result, err := runEngineScreenshotsWithLiveLogs(ctx, inputPath, outputDir, variant, subtitleMode, count, onLog)
 	if err != nil {
-		if capResult != nil {
-			files := make([]ScreenshotFileInfo, 0, len(capResult.Files))
-			for _, f := range capResult.Files {
-				files = append(files, ScreenshotFileInfo{Path: f.Path, Name: f.Name, Size: f.Size})
+		if len(result.Files) > 0 {
+			files := make([]ScreenshotFileInfo, 0, len(result.Files))
+			for _, path := range result.Files {
+				info, _ := os.Stat(path)
+				name := filepath.Base(path)
+				var size int64
+				if info != nil {
+					size = info.Size()
+				}
+				files = append(files, ScreenshotFileInfo{Path: path, Name: name, Size: size})
 			}
-			return ScriptResult{Files: files, Logs: capResult.Logs}, err
+			return ScriptResult{Files: files, Logs: result.Logs}, err
 		}
 		return ScriptResult{}, err
 	}
-	files := make([]ScreenshotFileInfo, 0, len(capResult.Files))
-	for _, f := range capResult.Files {
+	files := make([]ScreenshotFileInfo, 0, len(result.Files))
+	for _, path := range result.Files {
+		info, _ := os.Stat(path)
+		name := filepath.Base(path)
+		var size int64
+		if info != nil {
+			size = info.Size()
+		}
 		files = append(files, ScreenshotFileInfo{
-			Path: f.Path,
-			Name: f.Name,
-			Size: f.Size,
+			Path: path,
+			Name: name,
+			Size: size,
 		})
 	}
-	return ScriptResult{Files: files, Logs: capResult.Logs}, nil
+	return ScriptResult{Files: files, Logs: result.Logs}, nil
 }
 
 func RunUpload(ctx context.Context, inputPath, outputDir, variant, subtitleMode, hostName string, count int) (string, error) {
