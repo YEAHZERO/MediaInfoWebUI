@@ -12,9 +12,9 @@
 ARG ALPINE_MIRROR=mirrors.aliyun.com
 
 # ============================================
-# Stage: Base - 从上一版镜像提取依赖（锁定 digest 确保构建一致性）
+# Stage: Base - 从上一版镜像提取依赖（使用 latest 标签自动跟随最新推送）
 # ============================================
-FROM ghcr.io/yeahzero/mediainfowebui@sha256:7fd1ba1b9aa59dbc4e48b45eb67ea5638f07cbc9675342314d8b35a23a3d9fe1 AS base
+FROM ghcr.io/yeahzero/mediainfowebui:latest AS base
 # 上一版镜像已包含：ffmpeg、mediainfo、字体、libplacebo 等所有依赖
 # 无需重新安装，直接使用
 
@@ -63,10 +63,14 @@ ENV BUILD_COMMIT=${BUILD_COMMIT}
 ENV PROJECT_VERSION=${PROJECT_VERSION}
 
 RUN set -eux; \
+    BUILD_TIME_FINAL="${BUILD_TIME}"; \
+    if [ -z "$BUILD_TIME_FINAL" ]; then \
+        BUILD_TIME_FINAL=$(TZ=Asia/Shanghai date +%Y-%m-%dT%H:%M:%S+08:00); \
+    fi; \
     apk add --no-cache gcc musl-dev; \
     GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -buildvcs=false -tags "native websocket" \
         -ldflags="-s -w \
-            -X mediainfo/internal/httpapi/handlers.BuildTime=${BUILD_TIME} \
+            -X mediainfo/internal/httpapi/handlers.BuildTime=${BUILD_TIME_FINAL} \
             -X mediainfo/internal/httpapi/handlers.BuildVersion=${BUILD_VERSION} \
             -X mediainfo/internal/httpapi/handlers.BuildCommit=${BUILD_COMMIT} \
             -X mediainfo/internal/version.Version=${PROJECT_VERSION}" \
