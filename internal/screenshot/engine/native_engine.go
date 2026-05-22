@@ -44,7 +44,7 @@ func (h *textSubtitleHandler) BuildFilterChain(time float64, subtitleIndex int) 
 	if subtitleIndex < 0 {
 		return ""
 	}
-	return fmt.Sprintf("subtitles=%s:si=%d", h.sourcePath, subtitleIndex)
+	return fmt.Sprintf("subtitles='%s':si=%d", escapeFilterPath(h.sourcePath), subtitleIndex)
 }
 
 func (h *textSubtitleHandler) BuildOutputArgs(outputDir, filename string) []string {
@@ -635,4 +635,15 @@ func detectAllSubtitleStreams(ctx context.Context, sourcePath, ffprobe string) [
 	})
 
 	return streams
+}
+
+func escapeFilterPath(path string) string {
+	path = strings.ReplaceAll(path, `\`, `\\`)
+	path = strings.ReplaceAll(path, `'`, `\'`)
+	path = strings.ReplaceAll(path, `:`, `\:`)
+	path = strings.ReplaceAll(path, `,`, `\,`)
+	path = strings.ReplaceAll(path, `;`, `\;`)
+	path = strings.ReplaceAll(path, `[`, `\[`)
+	path = strings.ReplaceAll(path, `]`, `\]`)
+	return path
 }

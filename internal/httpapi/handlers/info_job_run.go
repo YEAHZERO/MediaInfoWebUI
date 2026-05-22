@@ -37,15 +37,15 @@ func (j *infoJob) run() {
 
 	switch j.kind {
 	case infoKindMediaInfo:
+		filelogger.Log(filelogger.MediaInfo, "[%s] 点击: 生成 MediaInfo | 输入: %s", j.id, j.inputPath)
 		bin, err := system.ResolveBin("MEDIAINFO_BIN", "mediainfo")
 		if err != nil {
-			filelogger.Log(filelogger.MediaInfo, "[%s] 未找到可执行文件: %s", j.id, err.Error())
+			filelogger.Log(filelogger.MediaInfo, "[%s] 失败: 未找到可执行文件 - %s", j.id, err.Error())
 			j.logger.Logf("[mediainfo] 未找到可执行文件: %s", err.Error())
 			j.fail(err)
 			return
 		}
 		filelogger.Log(filelogger.MediaInfo, "[%s] 输入路径: %s", j.id, j.inputPath)
-		filelogger.Log(filelogger.MediaInfo, "[%s] 使用命令: %s", j.id, bin)
 		j.logger.Logf("[mediainfo] 输入路径: %s", j.inputPath)
 		j.logger.Logf("[mediainfo] 使用命令: %s", bin)
 
@@ -55,9 +55,14 @@ func (j *infoJob) run() {
 			j.fail(err)
 			return
 		}
-		filelogger.Log(filelogger.MediaInfo, "[%s] 完成", j.id)
+		filelogger.Log(filelogger.MediaInfo, "[%s] 完成 | 输出长度: %d 字节", j.id, len(output))
 		j.succeed(output)
 	case infoKindBDInfo:
+		modeDesc := "完整报告"
+		if shouldExtractBDInfoCode(j.bdinfoMode) {
+			modeDesc = "精简报告"
+		}
+		filelogger.Log(filelogger.BDInfo, "[%s] 点击: 生成 BDInfo | 输入: %s | 模式: %s", j.id, j.inputPath, modeDesc)
 		filelogger.Log(filelogger.BDInfo, "[%s] 输入路径: %s", j.id, j.inputPath)
 		j.logger.Logf("[bdinfo] 输入路径: %s", j.inputPath)
 		output, err := runBDInfoJob(ctx, j.inputPath, j.bdinfoMode, j.logger)
@@ -66,7 +71,7 @@ func (j *infoJob) run() {
 			j.fail(err)
 			return
 		}
-		filelogger.Log(filelogger.BDInfo, "[%s] 完成", j.id)
+		filelogger.Log(filelogger.BDInfo, "[%s] 完成 | 模式: %s | 输出长度: %d 字节", j.id, modeDesc, len(output))
 		j.succeed(output)
 	default:
 		j.fail(errors.New("unsupported info job kind"))

@@ -25,10 +25,30 @@ func (j *screenshotJob) run() {
 		}
 	}()
 
-	filelogger.Log(filelogger.Screenshots, "[%s] 开始任务: path=%s mode=%s host=%s count=%d", j.id, j.inputPath, j.mode, j.host, j.count)
+	modeLabel := "下载"
+	if j.mode == screenshot.ModeLinks {
+		modeLabel = "图床"
+	}
+	variantLabel := "PNG"
+	if j.variant == "jpg" {
+		variantLabel = "JPG"
+	}
+	subtitleLabel := "自动"
+	if j.subtitleMode == "off" {
+		subtitleLabel = "关闭"
+	} else if j.subtitleMode == "force" {
+		subtitleLabel = "强制"
+	}
+	hostLabel := j.host
+	if hostLabel == "" {
+		hostLabel = "无"
+	}
+
+	filelogger.Log(filelogger.Screenshots, "[%s] 点击: 截图 | 路径=%s | 格式=%s | 字幕=%s | 数量=%d | 模式=%s | 图床=%s",
+		j.id, j.inputPath, variantLabel, subtitleLabel, j.count, modeLabel, hostLabel)
 
 	if !j.beginRun() {
-		filelogger.Log(filelogger.Screenshots, "[%s] 任务取消或重复", j.id)
+		filelogger.Log(filelogger.Screenshots, "[%s] 跳过: 任务已取消或重复", j.id)
 		if j.isCancellationRequested() {
 			j.finishCanceled()
 		}
@@ -40,7 +60,7 @@ func (j *screenshotJob) run() {
 
 	tempDir, err := createScreenshotTempDir("mediainfo-screenshot-job-*")
 	if err != nil {
-		filelogger.Log(filelogger.Screenshots, "[%s] 创建临时目录失败: %s", j.id, err.Error())
+		filelogger.Log(filelogger.Screenshots, "[%s] 失败: 创建临时目录 - %s", j.id, err.Error())
 		j.fail(err)
 		return
 	}
@@ -48,35 +68,42 @@ func (j *screenshotJob) run() {
 
 	switch j.mode {
 	case screenshot.ModeLinks:
-		filelogger.Log(filelogger.Screenshots, "[%s] 图床模式: host=%s", j.id, j.host)
+		filelogger.Log(filelogger.Screenshots, "[%s] 开始截图并上传至: %s", j.id, j.host)
 		result, err := screenshot.RunUploadWithLogs(ctx, j.inputPath, tempDir, j.variant, j.subtitleMode, j.host, j.count)
 		if err != nil {
 			filelogger.Log(filelogger.Screenshots, "[%s] 失败: %s", j.id, err.Error())
 			if result.Logs != "" {
+				filelogger.Log(filelogger.Screenshots, "[%s] 截图详情:\n%s", j.id, result.Logs)
+			}
+			if j.logger != nil {
 				j.logger.LogLine(result.Logs)
 			}
 			j.fail(err)
 			return
 		}
-		filelogger.Log(filelogger.Screenshots, "[%s] 成功: 生成了 %d 个链接", j.id, len(parseUploadLinks(result.Output)))
-		if result.Logs != "" {
+		links := parseUploadLinks(result.Output)
+		filelogger.Log(filelogger.Screenshots, "[%s] 成功: 截图 %d 张 | 上传 %d 个链接", j.id, j.count, len(links))
+		if result.Logs != "" && j.logger != nil {
 			j.logger.LogLine(result.Logs)
 		}
 		linkItems := parseUploadLinks(result.Output)
 		j.succeed(result.Output, "", linkItems, nil, nil)
 	default:
-		filelogger.Log(filelogger.Screenshots, "[%s] 下载模式", j.id)
+		filelogger.Log(filelogger.Screenshots, "[%s] 开始截图并打包下载", j.id)
 		downloadURL, logs, _, err := prepareScreenshotZipDownload(ctx, j.inputPath, tempDir, j.variant, j.subtitleMode, j.count)
 		if err != nil {
-			filelogger.Log(filelogger.Screenshots, "[%s] 打包下载失败: %s", j.id, err.Error())
+			filelogger.Log(filelogger.Screenshots, "[%s] 失败: %s", j.id, err.Error())
 			if logs != "" {
+				filelogger.Log(filelogger.Screenshots, "[%s] 截图详情:\n%s", j.id, logs)
+			}
+			if logs != "" && j.logger != nil {
 				j.logger.LogLine(logs)
 			}
 			j.fail(err)
 			return
 		}
-		filelogger.Log(filelogger.Screenshots, "[%s] 打包下载成功", j.id)
-		if logs != "" {
+		filelogger.Log(filelogger.Screenshots, "[%s] 成功: 截图 %d 张 | 打包完成", j.id, j.count)
+		if logs != "" && j.logger != nil {
 			j.logger.LogLine(logs)
 		}
 		j.succeed("", downloadURL, nil, nil, nil)
