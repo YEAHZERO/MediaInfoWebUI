@@ -61,7 +61,8 @@ func handleScreenshotsPost(w http.ResponseWriter, r *http.Request) {
 	defer os.RemoveAll(tempDir)
 
 	if mode == screenshot.ModeLinks {
-		result, err := screenshot.RunUploadWithLogs(ctx, path, tempDir, variant, subtitleMode, count)
+		hostName := r.FormValue("host")
+		result, err := screenshot.RunUploadWithLogs(ctx, path, tempDir, variant, subtitleMode, hostName, count)
 		if err != nil {
 			transport.WriteJSON(w, http.StatusInternalServerError, transport.InfoResponse{OK: false, Error: err.Error(), Logs: result.Logs})
 			return

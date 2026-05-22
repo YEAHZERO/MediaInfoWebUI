@@ -2,7 +2,7 @@ import { computed, ref, watch } from "vue";
 import { createScreenshotJob, fetchScreenshotJob, cancelScreenshotJob, prepareScreenshotZipDownload, requestInfo, requestScreenshotLinks, startPreparedDownload } from "../api/media";
 import { buildBBCodeText, buildCopyText, buildLinkText, copyText, extractDirectLinks, mergeOutputLinks } from "../utils/output";
 
-export function useMediaActions(path, screenshotVariant, screenshotCount, screenshotSubtitleMode, hasInput) {
+export function useMediaActions(path, screenshotVariant, screenshotCount, screenshotSubtitleMode, screenshotHost, hasInput) {
     const outputText = ref("");
     const linkItems = ref([]);
     const busy = ref(false);
@@ -211,7 +211,8 @@ export function useMediaActions(path, screenshotVariant, screenshotCount, screen
                 screenshotVariant.value,
                 screenshotSubtitleMode.value,
                 screenshotCount.value,
-                "links"
+                "links",
+                screenshotHost.value
             );
 
             const result = await waitForScreenshotJob(job.jobId, (job) => {
@@ -279,7 +280,8 @@ export function useMediaActions(path, screenshotVariant, screenshotCount, screen
                 screenshotVariant.value,
                 screenshotSubtitleMode.value,
                 screenshotCount.value,
-                "links"
+                "links",
+                screenshotHost.value
             );
 
             const result = await waitForScreenshotJob(job.jobId, (job) => {

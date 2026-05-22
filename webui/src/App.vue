@@ -65,6 +65,10 @@
                                 @busy-change="handleBDInfoBusyChange"
                             />
                         </div>
+                        <div class="field">
+                            <label class="field-label-muted">图床选择</label>
+                            <ScreenshotHostPicker v-model="screenshotHost" :busy="busy" />
+                        </div>
                     </div>
                 </div>
             </div>
@@ -126,6 +130,7 @@ import OutputPanel from "./components/OutputPanel.vue";
 import PathBrowser from "./components/PathBrowser.vue";
 import ScreenshotSubtitleModePicker from "./components/ScreenshotSubtitleModePicker.vue";
 import ScreenshotVariantPicker from "./components/ScreenshotVariantPicker.vue";
+import ScreenshotHostPicker from "./components/ScreenshotHostPicker.vue";
 import { useMediaActions } from "./composables/useMediaActions";
 import { usePathBrowser } from "./composables/usePathBrowser";
 import { loadAppState, saveAppState } from "./utils/storage";
@@ -135,6 +140,7 @@ const persistedState = loadAppState();
 const screenshotVariant = ref(persistedState.screenshotVariant);
 const screenshotCount = ref(persistedState.screenshotCount || 4);
 const screenshotSubtitleMode = ref(persistedState.screenshotSubtitleMode);
+const screenshotHost = ref(persistedState.screenshotHost || "pixhost");
 const bdinfoMode = ref(persistedState.bdinfoMode);
 const versionInfo = ref(null);
 const lastBuildTime = ref(localStorage.getItem('lastBuildTime') || '');
@@ -143,7 +149,7 @@ const pathBrowser = usePathBrowser({
     initialPath: persistedState.path,
     initialBrowserDir: persistedState.browserDir,
 });
-const mediaActions = useMediaActions(pathBrowser.path, screenshotVariant, screenshotCount, screenshotSubtitleMode, pathBrowser.hasInput);
+const mediaActions = useMediaActions(pathBrowser.path, screenshotVariant, screenshotCount, screenshotSubtitleMode, screenshotHost, pathBrowser.hasInput);
 
 const {
     path,
@@ -244,14 +250,15 @@ onMounted(() => {
 });
 
 watch(
-    [path, browserDir, screenshotVariant, screenshotCount, screenshotSubtitleMode, bdinfoMode],
-    ([nextPath, nextBrowserDir, nextVariant, nextCount, nextSubtitleMode, nextBDInfoMode]) => {
+    [path, browserDir, screenshotVariant, screenshotCount, screenshotSubtitleMode, screenshotHost, bdinfoMode],
+    ([nextPath, nextBrowserDir, nextVariant, nextCount, nextSubtitleMode, nextHost, nextBDInfoMode]) => {
         saveAppState({
             path: nextPath,
             browserDir: nextBrowserDir,
             screenshotVariant: nextVariant,
             screenshotCount: nextCount,
             screenshotSubtitleMode: nextSubtitleMode,
+            screenshotHost: nextHost,
             bdinfoMode: nextBDInfoMode,
         });
     },

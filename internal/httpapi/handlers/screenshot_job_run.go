@@ -45,7 +45,7 @@ func (j *screenshotJob) run() {
 
 	switch j.mode {
 	case screenshot.ModeLinks:
-		result, err := screenshot.RunUploadWithLogs(ctx, j.inputPath, tempDir, j.variant, j.subtitleMode, j.count)
+		result, err := screenshot.RunUploadWithLogs(ctx, j.inputPath, tempDir, j.variant, j.subtitleMode, j.host, j.count)
 		if err != nil {
 			if result.Logs != "" {
 				j.logger.LogLine(result.Logs)

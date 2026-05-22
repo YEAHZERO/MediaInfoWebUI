@@ -52,8 +52,8 @@ export async function requestScreenshotLinks(path, variant, subtitleMode, count)
     return data;
 }
 
-export async function createScreenshotJob(path, variant, subtitleMode, count, mode) {
-    const response = await postForm("/api/screenshot-jobs", { path, mode, variant, subtitle_mode: subtitleMode, count });
+export async function createScreenshotJob(path, variant, subtitleMode, count, mode, host) {
+    const response = await postForm("/api/screenshot-jobs", { path, mode, variant, subtitle_mode: subtitleMode, count, host });
     const data = await safeReadJSON(response);
     if (!response.ok || !data.ok || typeof data.job_id !== "string" || data.job_id.trim() === "") {
         throw buildResponseError(data.error || "截图任务创建失败。", data);

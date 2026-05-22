@@ -19,7 +19,7 @@ import (
 	"mediainfo/internal/config"
 )
 
-const apiURL = "https://img2.pixhost.to/images"
+const apiURL = "https://api.pixhost.to/images"
 
 var thumbHostPattern = regexp.MustCompile(`^t([0-9]+)\.pixhost\.to$`)
 

@@ -38,6 +38,7 @@ type screenshotJob struct {
 	variant         string
 	subtitleMode    string
 	count           int
+	host            string
 	status          string
 	output          string
 	downloadURL     string
@@ -72,6 +73,7 @@ func createScreenshotJob(request screenshotRequest) (*screenshotJob, error) {
 		variant:      request.Variant,
 		subtitleMode: request.SubtitleMode,
 		count:        request.Count,
+		host:         request.Host,
 		status:       screenshotJobStatusPending,
 		createdAt:    now,
 		updatedAt:    now,

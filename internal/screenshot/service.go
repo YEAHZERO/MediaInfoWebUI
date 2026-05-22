@@ -10,7 +10,7 @@ import (
 
 	"mediainfo/internal/media"
 	"mediainfo/internal/screenshot/engine"
-	"mediainfo/internal/screenshot/pixhost"
+	"mediainfo/internal/screenshot/hosting"
 )
 
 const (
@@ -100,15 +100,15 @@ func RunScriptWithLogs(ctx context.Context, inputPath, outputDir, variant, subti
 	return ScriptResult{Files: files, Logs: capResult.Logs}, nil
 }
 
-func RunUpload(ctx context.Context, inputPath, outputDir, variant, subtitleMode string, count int) (string, error) {
-	result, err := RunUploadWithLogs(ctx, inputPath, outputDir, variant, subtitleMode, count)
+func RunUpload(ctx context.Context, inputPath, outputDir, variant, subtitleMode, hostName string, count int) (string, error) {
+	result, err := RunUploadWithLogs(ctx, inputPath, outputDir, variant, subtitleMode, hostName, count)
 	if err != nil {
 		return "", err
 	}
 	return result.Output, nil
 }
 
-func RunUploadWithLogs(ctx context.Context, inputPath, outputDir, variant, subtitleMode string, count int) (UploadResult, error) {
+func RunUploadWithLogs(ctx context.Context, inputPath, outputDir, variant, subtitleMode, hostName string, count int) (UploadResult, error) {
 	screenshotResult, err := RunScriptWithLogs(ctx, inputPath, outputDir, variant, subtitleMode, count)
 	if err != nil {
 		return UploadResult{Logs: screenshotResult.Logs}, err
@@ -123,31 +123,43 @@ func RunUploadWithLogs(ctx context.Context, inputPath, outputDir, variant, subti
 		return UploadResult{Logs: screenshotResult.Logs}, errors.New("no screenshots were generated")
 	}
 
-	var lossyFiles []string
-	for _, f := range screenshotResult.Files {
-		if f.Size > 0 && f.Size > 1024*1024 {
-			lossyFiles = append(lossyFiles, f.Name)
-		}
+	hostManager := hosting.NewManager()
+	hostManager.Register(hosting.NewPixhost())
+	hostManager.Register(hosting.NewFreeimage())
+	hostManager.Register(hosting.NewLocal())
+	hostManager.SetDefault("pixhost")
+
+	host := hostManager.Get(hostName)
+	if host == nil {
+		return UploadResult{Logs: screenshotResult.Logs}, errors.New("unknown image host: " + hostName)
 	}
 
-	result, err := pixhost.UploadImages(ctx, imagePaths, lossyFiles, 10*1024*1024, nil, nil)
+	var logs strings.Builder
+	logHandler := func(msg string) {
+		logs.WriteString(msg)
+		logs.WriteString("\n")
+	}
 
-	logs := strings.TrimSpace(screenshotResult.Logs)
-	if result.Logs != "" {
-		if logs != "" {
-			logs += "\n\n"
+	links, err := host.Upload(ctx, imagePaths, logHandler)
+
+	logStr := strings.TrimSpace(screenshotResult.Logs)
+	if logs.Len() > 0 {
+		if logStr != "" {
+			logStr += "\n\n"
 		}
-		logs += result.Logs
+		logStr += strings.TrimSpace(logs.String())
 	}
 
 	if err != nil {
-		return UploadResult{Logs: logs}, err
+		return UploadResult{Logs: logStr}, err
 	}
 
-	if result.Output == "" {
-		return UploadResult{Logs: logs}, errors.New("pixhost upload completed but returned no links")
+	if len(links) == 0 {
+		return UploadResult{Logs: logStr}, errors.New("host upload completed but returned no links")
 	}
-	return UploadResult{Output: result.Output, Logs: logs}, nil
+
+	output := strings.Join(links, "\n")
+	return UploadResult{Output: output, Logs: logStr}, nil
 }
 
 func RunEngineCapture(ctx context.Context, inputPath, outputDir, variant, subtitleMode string, count int) (*engine.CaptureResult, error) {

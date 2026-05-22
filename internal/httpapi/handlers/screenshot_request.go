@@ -14,6 +14,7 @@ type screenshotRequest struct {
 	Variant      string
 	SubtitleMode string
 	Count        int
+	Host         string
 }
 
 type screenshotRunOptions struct {
@@ -36,6 +37,7 @@ func parseScreenshotFormRequest(r *http.Request) (*screenshotRequest, error) {
 		Variant:      options.Variant,
 		SubtitleMode: options.SubtitleMode,
 		Count:        options.Count,
+		Host:         r.FormValue("host"),
 	}, nil
 }
 

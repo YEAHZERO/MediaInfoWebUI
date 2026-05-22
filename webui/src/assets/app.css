@@ -386,6 +386,25 @@ input[type="number"] {
   gap: 10px;
 }
 
+.host-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.host-picker .host-option {
+  min-width: 72px;
+  font-size: 0.8em;
+  padding: 8px 12px;
+}
+
+.host-picker .host-option.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+  box-shadow: 0 8px 18px rgba(47, 111, 109, 0.18);
+}
+
 .variant-option {
   min-width: 84px;
 }
