@@ -23,7 +23,7 @@ func (r *Runner) PrepareTextSubtitleRenderSource() error {
 		return nil
 	}
 
-	pattern, extractionArgs, extractedCodec, logMessage := InternalTextSubtitleExtractionPlan(selection.Codec)
+	pattern, extractionArgs, _, logMessage := InternalTextSubtitleExtractionPlan(selection.Codec)
 	r.logProgress("字幕", 3, 3, "正在提取内封文字字幕。")
 	r.logf("%s", logMessage)
 
@@ -61,11 +61,6 @@ func (r *Runner) PrepareTextSubtitleRenderSource() error {
 
 	state := r.state()
 	state.TempSubtitleFile = tempPath
-	selection.Mode = "external"
-	selection.File = tempPath
-	selection.Codec = extractedCodec
-	selection.StreamIndex = -1
-	selection.RelativeIndex = -1
 	selection.ExtractedText = true
 	r.logf("[信息] 已提取内封文本字幕供截图使用：%s", tempPath)
 	return nil
