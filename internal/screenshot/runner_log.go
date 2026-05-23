@@ -3,6 +3,7 @@ package screenshot
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -260,34 +261,25 @@ func generateScreenshotTimestampsFromSource(ctx context.Context, sourcePath stri
 		return fallbackTimestamps(count)
 	}
 
-	return generateDistributedTimestamps(duration, count)
+	return screenshottimestamps.GenerateRandom(duration, count)
 }
 
 func fallbackTimestamps(count int) []float64 {
-	result := make([]float64, count)
-	for i := 0; i < count; i++ {
-		result[i] = float64(i*10 + 5)
-	}
-	return result
-}
-
-func generateDistributedTimestamps(duration float64, count int) []float64 {
 	if count <= 0 {
 		return nil
 	}
-	if duration <= 0 {
-		return []float64{0}
-	}
-	if count == 1 {
-		return []float64{duration / 2}
-	}
-
-	seconds := make([]float64, count)
-	step := duration / float64(count+1)
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	result := make([]float64, count)
 	for i := 0; i < count; i++ {
-		seconds[i] = step * float64(i+1)
+		base := float64(i*10 + 5)
+		jitter := (rng.Float64() - 0.5) * 4.0
+		val := base + jitter
+		if val < 0 {
+			val = 0
+		}
+		result[i] = val
 	}
-	return seconds
+	return result
 }
 
 func (r *screenshotRunner) cleanupTemporarySubtitleResources() {
