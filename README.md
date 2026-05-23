@@ -198,13 +198,10 @@ git clone https://github.com/YEAHZERO/MediaInfoWebUI.git
 cd MediaInfoWebUI
 
 # 构建 native 版本（推荐）
-docker build --network=host --target native -t mediainfowebui:native .
+make docker-native
 
-# 或使用 make
-make docker-native  # 构建 native 版本
-
-# 运行
-docker run -d --name mediainfo --privileged --network host \
+# 运行（WSL 本地部署，使用端口映射）
+docker run -d --name mediainfo --privileged -p 28888:28888 \
   -e TZ=Asia/Shanghai -e PORT=28888 -e REQUEST_TIMEOUT=30m \
   -v /lib/modules:/lib/modules:ro \
   -v /path/to/media:/media:ro \
@@ -212,45 +209,43 @@ docker run -d --name mediainfo --privileged --network host \
   mediainfowebui:native
 ```
 
-> **构建网络问题**：如遇 `failed to create endpoint ... on network bridge: operation not supported`，务必加 `--network=host`。
-> **网络问题解决方案**：确保使用标准 GitHub URL（github.com），避免使用镜像站点导致连接问题。
+> **WSL 注意**：WSL2 + Docker Desktop 环境下建议使用 `-p 28888:28888` 端口映射，而非 `--network=host`。
+> **服务器部署**：服务器环境下可使用 `--network=host` 省去端口映射。
 
-访问 `http://你的服务器IP:28888`
+访问 `http://localhost:28888`
 
 ### 部署方式选择
 
 你可以选择以下任意一种部署方式：
 
-#### 方式一：一键自动部署（推荐）
-
-提供自动识别环境并部署的脚本：
+#### 方式一：本地构建部署（推荐）
 
 ```bash
 # 克隆仓库（如需要）
 git clone https://github.com/YEAHZERO/MediaInfoWebUI.git
 cd MediaInfoWebUI
 
-# 一键部署（推荐）
-./deploy.sh
+# 1. 构建镜像
+make docker-native
 
-# 自定义容器名和端口
-./deploy.sh latest my-media-container 28888
+# 2. 运行容器（WSL 本地）
+docker run -d --name mediainfo --privileged -p 28888:28888 \
+  -e TZ=Asia/Shanghai -e PORT=28888 -e REQUEST_TIMEOUT=30m \
+  -v /home/<your_username>/qbittorrent/downloads:/media:ro \
+  --restart unless-stopped \
+  mediainfowebui:native
+
+# 3. 服务器部署（使用 host 网络）
+docker run -d --name mediainfo --privileged --network host \
+  -e TZ=Asia/Shanghai -e PORT=28888 -e REQUEST_TIMEOUT=30m \
+  -v /home/<your_username>/qbittorrent/downloads:/media:ro \
+  --restart unless-stopped \
+  mediainfowebui:native
 ```
 
-**特点**：
+#### 方式二：直接拉取镜像
 
-- ✅ 自动检测 WSL 或服务器环境
-- ✅ **智能路径查找**：按优先级搜索，支持智能识别有 docker/qb 文件夹的上级目录
-- ✅ 自动选择正确的网络模式
-- ✅ 彩色输出，友好提示
-
-**智能路径查找优先级**：
-
-1. **优先路径**：/home/liveup/ → /home/live/ → $HOME/ 下的 qbittorrent/downloads
-2. **智能查找**：查找有 docker 或 qb 文件夹的用户目录下的下载文件夹
-3. **后备路径**：常见路径如 /data/、/media/ 等
-
-#### 方式二：手动 Docker 部署
+如果不想构建，可以直接拉取预构建的镜像：
 
 如果需要完全自定义路径和配置，可以使用以下命令：
 
@@ -590,6 +585,27 @@ docker inspect mediainfo | grep Privileged
 
 ## 更新日志
 
+### \[1.5.6] - 2026-05-23
+
+**重构 - Dockerfile 简化**
+
+- 从基础镜像（ghcr.io）改为从 alpine:3.20 全新构建
+- 移除复杂的多阶段构建依赖链（golang、node 等编译工具不再进入最终镜像）
+- 镜像体积从 ~876MB 减少到 ~698MB（减少 178MB）
+- 镜像层数从 282 层减少到 4 层
+- 清理项目废弃文件：`build_and_push.sh`、`deploy.sh`、`test-paths.sh`、`docs/` 等
+
+**优化 - 截图性能提升**
+
+- 移除截图滤镜链中冗余的 `setpts` + `select` 滤镜（与 minfo 一致）
+- 添加每张截图的详细渲染耗时日志
+- 截图时间点改为根据视频时长随机分布
+
+**新增 - 图床/下载模式统一**
+
+- 下载和图床模式共用一次截图生成，避免二次截图
+- 新增 `RunUploadFromDir` 和 `zipScreenshotsFromDir` 函数
+
 ### \[1.5.5] - 2026-05-14
 
 **简化 - 移除 light 版本**
@@ -628,15 +644,14 @@ docker inspect mediainfo | grep Privileged
 
 | 版本                     | 压缩后     | 解压后     |
 | ---------------------- | ------- | ------- |
-| native/latest          | \~120MB | \~400MB |
+| native/latest          | ~260MB | ~698MB |
 
 **优化说明**：
 
-| 优化项                                    | 节省空间   |
-| -------------------------------------- | ------ |
-| 字体替换 (font-noto-cjk → font-wqy-zenhei) | \~84MB |
-| 文档清理 (/usr/share/doc/man/info)         | \~30MB |
-| 镜像层优化                                  | \~10MB |
+| 优化项                    | 说明         |
+| ---------------------- | ---------- |
+| 字体 (font-noto-cjk)   | ~280MB     |
+| 镜像层优化                  | 层数减少到 4 层 |
 
 ### \[1.5.3] - 2026-05-12
 

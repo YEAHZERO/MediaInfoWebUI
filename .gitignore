@@ -1,14 +1,23 @@
+# Build outputs
 /bin/
 *.zip
+/mediainfo
+__debug_bin*
+
+# Web UI
 /webui/node_modules/
 /webui/.vite/
 /webui/dist/
+
+# Go
 .gocache
+
+# Env files
 .env
-__debug_bin*
+
+# Test data
 /test-media
-.trae/
-/mediainfo
-build_and_push.sh
-build_and_push.sh
 test-paths.sh
+
+# IDE / Trae
+.trae/
