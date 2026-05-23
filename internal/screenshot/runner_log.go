@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
-	"mediainfo/internal/screenshot/engine"
 	screenshotprogress "mediainfo/internal/screenshot/progress"
+	screenshottimestamps "mediainfo/internal/screenshot/timestamps"
+	"mediainfo/internal/system"
 	"mediainfo/internal/taskprogress"
 )
 
@@ -108,29 +110,154 @@ func (r *screenshotRunner) captureScreenshot(aligned float64, outputPath string)
 	sourcePath := r.sourcePath
 	if r.subtitleState.DVDResult != nil && r.subtitleState.DVDResult.SelectedVOBPath != "" {
 		sourcePath = r.subtitleState.DVDResult.SelectedVOBPath
-		r.logf("[调试] DVD 截图使用 VOB 路径: %s", sourcePath)
 	}
-	_, err := defaultEngine.Capture(r.ctx, engine.CaptureOptions{
-		SourcePath:   sourcePath,
-		OutputDir:    outputPath,
-		Variant:      r.variant,
-		SubtitleMode: r.subtitleMode,
-		Count:        1,
-	})
-	return err
+
+	coarseBack := r.renderCoarseBack()
+	_, fineSecond, coarseHMS := r.splitCaptureTimeline(aligned, coarseBack)
+
+	if r.subtitle.Mode != "none" && r.isSupportedBitmapSubtitle() {
+		return r.captureBitmapScreenshot(sourcePath, coarseHMS, fineSecond, outputPath)
+	}
+	return r.captureFrameDirect(sourcePath, coarseHMS, fineSecond, outputPath)
+}
+
+func (r *screenshotRunner) captureFrameDirect(sourcePath, coarseHMS string, fineSecond float64, outputPath string) error {
+	args := []string{
+		"-y",
+		"-v", "error",
+		"-fflags", "+genpts",
+		"-ss", coarseHMS,
+		"-probesize", r.settings.ProbeSize,
+		"-analyzeduration", r.settings.Analyze,
+		"-i", sourcePath,
+		"-ss", screenshottimestamps.FormatSeconds(fineSecond),
+		"-map", "0:v:0",
+		"-frames:v", "1",
+		"-an",
+	}
+
+	filterChain := joinFilters(
+		r.buildTextSubtitleFilter(),
+		strings.TrimSpace(r.render.ColorChain),
+		r.displayAspectFilter(),
+	)
+	if filterChain != "" {
+		args = append(args, "-vf", filterChain)
+	}
+
+	if r.variant == "jpg" {
+		args = append(args, "-vcodec", "mjpeg", "-qscale:v", "3")
+	} else {
+		args = append(args, "-vcodec", "png", "-compression_level", "1")
+	}
+
+	args = append(args, "-y", outputPath)
+
+	_, stderr, err := system.RunCommand(r.ctx, r.tools.FFmpegBin, args...)
+	if err != nil {
+		return parseFFmpegError(err, stderr, filterChain, sourcePath)
+	}
+	return nil
+}
+
+func parseFFmpegError(err error, stderr, filterChain, sourcePath string) error {
+	msg := system.BestErrorMessage(err, stderr, "")
+	return &ffmpegCaptureError{message: msg, filterChain: filterChain, source: sourcePath}
+}
+
+type ffmpegCaptureError struct {
+	message     string
+	filterChain string
+	source      string
+}
+
+func (e *ffmpegCaptureError) Error() string {
+	return "ffmpeg 截图失败"
+}
+
+func (e *ffmpegCaptureError) Unwrap() string {
+	return e.message
+}
+
+func (r *screenshotRunner) captureBitmapScreenshot(sourcePath, coarseHMS string, fineSecond float64, outputPath string) error {
+	overlayDir, err := os.MkdirTemp("", "screenshot-bitmap-overlay-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(overlayDir)
+
+	baseFrame := filepath.Join(overlayDir, "base.png")
+	if err := r.captureFrameDirect(sourcePath, coarseHMS, fineSecond, baseFrame); err != nil {
+		return err
+	}
+
+	filterComplex := r.buildPGSRenderFilterComplex()
+	filterComplex = strings.ReplaceAll(filterComplex, "[0:v:0]", "["+baseFrame+":v:0]")
+
+	args := []string{
+		"-y",
+		"-v", "error",
+		"-i", baseFrame,
+		"-i", sourcePath,
+		"-filter_complex", filterComplex,
+		"-map", "[out]",
+		"-frames:v", "1",
+	}
+
+	if r.variant == "jpg" {
+		args = append(args, "-vcodec", "mjpeg", "-qscale:v", "3")
+	} else {
+		args = append(args, "-vcodec", "png", "-compression_level", "1")
+	}
+
+	args = append(args, "-y", outputPath)
+
+	_, stderr, err := system.RunCommand(r.ctx, r.tools.FFmpegBin, args...)
+	if err != nil {
+		return fmt.Errorf("ffmpeg 位图截图覆盖失败: %s", system.BestErrorMessage(err, stderr, ""))
+	}
+	return nil
 }
 
 func generateScreenshotTimestampsFromSource(ctx context.Context, sourcePath string, count int) []float64 {
-	result := make([]float64, 0, count)
+	ffprobe, err := system.ResolveBin("FFPROBE_BIN", "ffprobe")
+	if err != nil {
+		return fallbackTimestamps(count)
+	}
+
+	duration, err := screenshottimestamps.ProbeDuration(ctx, ffprobe, sourcePath)
+	if err != nil || duration <= 0 {
+		return fallbackTimestamps(count)
+	}
+
+	return generateDistributedTimestamps(duration, count)
+}
+
+func fallbackTimestamps(count int) []float64 {
+	result := make([]float64, count)
 	for i := 0; i < count; i++ {
-		result = append(result, float64(i*10+5))
+		result[i] = float64(i*10 + 5)
 	}
 	return result
 }
 
-func init() {
-	_ = fmt.Sprintf
-	_ = strings.TrimSpace
+func generateDistributedTimestamps(duration float64, count int) []float64 {
+	if count <= 0 {
+		return nil
+	}
+	if duration <= 0 {
+		return []float64{0}
+	}
+	if count == 1 {
+		return []float64{duration / 2}
+	}
+
+	seconds := make([]float64, count)
+	step := duration / float64(count+1)
+	for i := 0; i < count; i++ {
+		seconds[i] = step * float64(i+1)
+	}
+	return seconds
 }
 
 func (r *screenshotRunner) cleanupTemporarySubtitleResources() {

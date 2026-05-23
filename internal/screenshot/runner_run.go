@@ -82,9 +82,15 @@ func (r *screenshotRunner) prepareScreenshotCapture(requested float64, state *sc
 	}
 
 	ts := int(aligned)
-	outputName := fmt.Sprintf("%dmin%02ds.png", ts/60, ts%60)
-	if ts < 60 {
-		outputName = fmt.Sprintf("%ds.png", ts)
+	hours := ts / 3600
+	minutes := (ts % 3600) / 60
+	seconds := ts % 60
+	ext := r.settings.Ext
+	var outputName string
+	if hours > 0 {
+		outputName = fmt.Sprintf("%dh%02dmin%02ds%s", hours, minutes, seconds, ext)
+	} else {
+		outputName = fmt.Sprintf("%02dmin%02ds%s", minutes, seconds, ext)
 	}
 	outputPath := filepath.Join(r.outputDir, outputName)
 	r.logf("[信息] 截图: 请求 %s → 对齐 %s → 输出 %s",
