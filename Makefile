@@ -5,7 +5,7 @@
 BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 BUILD_VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-PROJECT_VERSION := 1.5.5
+PROJECT_VERSION := 1.5.6
 BUILD_ARGS := --build-arg BUILD_TIME="$(BUILD_TIME)" --build-arg BUILD_VERSION="$(BUILD_VERSION)" --build-arg BUILD_COMMIT="$(BUILD_COMMIT)" --build-arg PROJECT_VERSION="$(PROJECT_VERSION)"
 LDFLAGS := -s -w -X mediainfo/internal/httpapi/handlers.BuildTime=$(BUILD_TIME) -X mediainfo/internal/httpapi/handlers.BuildVersion=$(BUILD_VERSION) -X mediainfo/internal/httpapi/handlers.BuildCommit=$(BUILD_COMMIT) -X mediainfo/internal/version.Version=$(PROJECT_VERSION)
 
