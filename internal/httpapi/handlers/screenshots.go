@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"mediainfo/internal/config"
 	"mediainfo/internal/httpapi/transport"
 	"mediainfo/internal/screenshot"
+	screenshotdelivery "mediainfo/internal/screenshot/delivery"
 )
 
 func ScreenshotsHandler(w http.ResponseWriter, r *http.Request) {
@@ -186,6 +188,46 @@ func generateScreenshotZip(ctx context.Context, path, tempDir, variant, subtitle
 		return nil, result.Logs, nil, err
 	}
 	return zipBytes, result.Logs, files, nil
+}
+
+func zipScreenshotsFromDir(tempDir string) ([]byte, []transport.ScreenshotFileInfo, error) {
+	filePaths, err := screenshotdelivery.ListImageFiles(tempDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(filePaths) == 0 {
+		return nil, nil, errors.New("no screenshots found in temp directory")
+	}
+
+	engineFiles := make([]screenshot.ScreenshotFileInfo, 0, len(filePaths))
+	for _, path := range filePaths {
+		info, _ := os.Stat(path)
+		name := filepath.Base(path)
+		var size int64
+		if info != nil {
+			size = info.Size()
+		}
+		engineFiles = append(engineFiles, screenshot.ScreenshotFileInfo{
+			Path: path,
+			Name: name,
+			Size: size,
+		})
+	}
+
+	zipBytes, err := screenshot.ZipFiles(engineFiles)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	files := make([]transport.ScreenshotFileInfo, 0, len(filePaths))
+	for _, ef := range engineFiles {
+		files = append(files, transport.ScreenshotFileInfo{
+			Path: ef.Path,
+			Name: ef.Name,
+			Size: ef.Size,
+		})
+	}
+	return zipBytes, files, nil
 }
 
 func servePreparedScreenshotDownload(w http.ResponseWriter, r *http.Request, token string) {

@@ -88,8 +88,16 @@ func (j *screenshotJob) run() {
 		if result.Logs != "" && j.logger != nil {
 			j.logger.LogLine(result.Logs)
 		}
+		var downloadURL string
+		zipBytes, _, zipErr := zipScreenshotsFromDir(tempDir)
+		if zipErr == nil {
+			token, saveErr := screenshot.SavePreparedDownload(zipBytes)
+			if saveErr == nil {
+				downloadURL = "/api/screenshots?token=" + token
+			}
+		}
 		linkItems := parseUploadLinks(result.Output)
-		j.succeed(result.Output, "", linkItems, nil, nil)
+		j.succeed(result.Output, downloadURL, linkItems, nil, nil)
 	default:
 		filelogger.Log(filelogger.Screenshots, "[%s] 开始截图并打包下载", j.id)
 		downloadURL, logs, _, err := prepareScreenshotZipDownload(ctx, j.inputPath, tempDir, j.variant, j.subtitleMode, j.count, j.logger.LogLine)

@@ -128,8 +128,6 @@ func (r *screenshotRunner) captureFrameDirect(sourcePath, coarseHMS string, fine
 		"-v", "error",
 		"-fflags", "+genpts",
 		"-ss", coarseHMS,
-		"-probesize", r.settings.ProbeSize,
-		"-analyzeduration", r.settings.Analyze,
 		"-i", sourcePath,
 		"-ss", screenshottimestamps.FormatSeconds(fineSecond),
 		"-map", "0:v:0",
