@@ -129,8 +129,8 @@ func shouldPrepareDownload(r *http.Request) bool {
 	return strings.TrimSpace(r.FormValue("prepare_download")) == "1"
 }
 
-func prepareScreenshotZipDownload(ctx context.Context, path, tempDir, variant, subtitleMode string, count int) (string, string, []transport.ScreenshotFileInfo, error) {
-	zipBytes, logs, files, err := generateScreenshotZip(ctx, path, tempDir, variant, subtitleMode, count)
+func prepareScreenshotZipDownload(ctx context.Context, path, tempDir, variant, subtitleMode string, count int, logHandlers ...screenshot.LogHandler) (string, string, []transport.ScreenshotFileInfo, error) {
+	zipBytes, logs, files, err := generateScreenshotZip(ctx, path, tempDir, variant, subtitleMode, count, logHandlers...)
 	if err != nil {
 		return "", logs, nil, err
 	}
@@ -157,8 +157,8 @@ func writeScreenshotZipResponse(ctx context.Context, w http.ResponseWriter, path
 	return nil
 }
 
-func generateScreenshotZip(ctx context.Context, path, tempDir, variant, subtitleMode string, count int) ([]byte, string, []transport.ScreenshotFileInfo, error) {
-	result, err := screenshot.RunScriptWithLogs(ctx, path, tempDir, variant, subtitleMode, count)
+func generateScreenshotZip(ctx context.Context, path, tempDir, variant, subtitleMode string, count int, logHandlers ...screenshot.LogHandler) ([]byte, string, []transport.ScreenshotFileInfo, error) {
+	result, err := screenshot.RunScriptWithLogs(ctx, path, tempDir, variant, subtitleMode, count, logHandlers...)
 	if err != nil {
 		return nil, result.Logs, nil, err
 	}

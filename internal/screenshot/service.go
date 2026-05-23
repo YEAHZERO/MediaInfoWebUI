@@ -64,11 +64,16 @@ func RunScript(ctx context.Context, inputPath, outputDir, variant, subtitleMode 
 	return result.Files, nil
 }
 
-func RunScriptWithLogs(ctx context.Context, inputPath, outputDir, variant, subtitleMode string, count int) (ScriptResult, error) {
+func RunScriptWithLogs(ctx context.Context, inputPath, outputDir, variant, subtitleMode string, count int, logHandlers ...LogHandler) (ScriptResult, error) {
 	var logs strings.Builder
 	onLog := func(msg string) {
 		logs.WriteString(msg)
 		logs.WriteString("\n")
+		for _, h := range logHandlers {
+			if h != nil {
+				h(msg)
+			}
+		}
 	}
 
 	result, err := runEngineScreenshotsWithLiveLogs(ctx, inputPath, outputDir, variant, subtitleMode, count, onLog)
@@ -113,8 +118,8 @@ func RunUpload(ctx context.Context, inputPath, outputDir, variant, subtitleMode,
 	return result.Output, nil
 }
 
-func RunUploadWithLogs(ctx context.Context, inputPath, outputDir, variant, subtitleMode, hostName string, count int) (UploadResult, error) {
-	screenshotResult, err := RunScriptWithLogs(ctx, inputPath, outputDir, variant, subtitleMode, count)
+func RunUploadWithLogs(ctx context.Context, inputPath, outputDir, variant, subtitleMode, hostName string, count int, logHandlers ...LogHandler) (UploadResult, error) {
+	screenshotResult, err := RunScriptWithLogs(ctx, inputPath, outputDir, variant, subtitleMode, count, logHandlers...)
 	if err != nil {
 		return UploadResult{Logs: screenshotResult.Logs}, err
 	}
@@ -143,6 +148,11 @@ func RunUploadWithLogs(ctx context.Context, inputPath, outputDir, variant, subti
 	logHandler := func(msg string) {
 		logs.WriteString(msg)
 		logs.WriteString("\n")
+		for _, h := range logHandlers {
+			if h != nil {
+				h(msg)
+			}
+		}
 	}
 
 	links, err := host.Upload(ctx, imagePaths, logHandler)

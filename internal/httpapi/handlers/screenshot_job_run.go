@@ -71,7 +71,7 @@ func (j *screenshotJob) run() {
 	switch j.mode {
 	case screenshot.ModeLinks:
 		filelogger.Log(filelogger.Screenshots, "[%s] 开始截图并上传至: %s", j.id, j.host)
-		result, err := screenshot.RunUploadWithLogs(ctx, j.inputPath, tempDir, j.variant, j.subtitleMode, j.host, j.count)
+		result, err := screenshot.RunUploadWithLogs(ctx, j.inputPath, tempDir, j.variant, j.subtitleMode, j.host, j.count, j.logger.LogLine)
 		if err != nil {
 			filelogger.Log(filelogger.Screenshots, "[%s] 失败: %s | 耗时=%s", j.id, err.Error(), time.Since(jobStart))
 			if result.Logs != "" {
@@ -92,7 +92,7 @@ func (j *screenshotJob) run() {
 		j.succeed(result.Output, "", linkItems, nil, nil)
 	default:
 		filelogger.Log(filelogger.Screenshots, "[%s] 开始截图并打包下载", j.id)
-		downloadURL, logs, _, err := prepareScreenshotZipDownload(ctx, j.inputPath, tempDir, j.variant, j.subtitleMode, j.count)
+		downloadURL, logs, _, err := prepareScreenshotZipDownload(ctx, j.inputPath, tempDir, j.variant, j.subtitleMode, j.count, j.logger.LogLine)
 		if err != nil {
 			filelogger.Log(filelogger.Screenshots, "[%s] 失败: %s | 耗时=%s", j.id, err.Error(), time.Since(jobStart))
 			if logs != "" {
