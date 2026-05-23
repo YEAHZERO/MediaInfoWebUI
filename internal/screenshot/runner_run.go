@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	screenshotdelivery "mediainfo/internal/screenshot/delivery"
 	screenshottimestamps "mediainfo/internal/screenshot/timestamps"
@@ -133,14 +134,19 @@ func (r *screenshotRunner) resolveAlignedScreenshotTime(requested float64, state
 func (r *screenshotRunner) capturePreparedScreenshot(plan screenshotCapturePlan, state *screenshotRunState) {
 	defer r.activeShot.Reset()
 
+	shotStart := time.Now()
+
 	if err := r.captureScreenshot(plan.requested, plan.aligned, plan.outputPath, plan.outputName); err != nil {
 		processed := state.markFailed(plan.outputName, err)
+		r.logf("[耗时] 截图失败: %s | 总耗时=%.3fs", plan.outputName, time.Since(shotStart).Seconds())
 		r.logProgress("截图完成", processed, state.totalShots, fmt.Sprintf("第 %d/%d 张截图失败：%s", processed, state.totalShots, plan.outputName))
 		return
 	}
 
+	elapsed := time.Since(shotStart)
+	r.logf("[耗时] 截图成功: %s | 总耗时=%.3fs", plan.outputName, elapsed.Seconds())
 	processed := state.markSucceeded(plan.aligned)
-	r.logProgress("截图完成", processed, state.totalShots, fmt.Sprintf("已完成第 %d/%d 张截图：%s", processed, state.totalShots, plan.outputName))
+	r.logProgress("截图完成", processed, state.totalShots, fmt.Sprintf("已完成第 %d/%d 张截图：%s（%.1fs）", processed, state.totalShots, plan.outputName, elapsed.Seconds()))
 }
 
 func (r *screenshotRunner) finalizeScreenshotRun(state *screenshotRunState) ([]string, error) {

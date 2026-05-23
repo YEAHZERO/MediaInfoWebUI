@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	screenshotruntime "mediainfo/internal/screenshot/runtime"
-	screenshottimestamps "mediainfo/internal/screenshot/timestamps"
 )
 
 func (r *screenshotRunner) displayAspectFilter() string {
@@ -88,25 +87,13 @@ func buildFilterGraphStep(input, chain, output string) string {
 	return fmt.Sprintf("%s%s%s", input, filterChain, output)
 }
 
-func (r *screenshotRunner) buildTextSubtitleRenderChain(timelineBase, aligned float64, subFilter string) string {
-	baseTimeline := fmt.Sprintf("setpts=PTS-STARTPTS+%s/TB", screenshottimestamps.FormatSeconds(timelineBase))
-	selectFrame := fmt.Sprintf("select='gte(t,%s)'", screenshottimestamps.FormatSeconds(aligned))
+func (r *screenshotRunner) buildTextSubtitleFilterChain(subFilter string) string {
+	colorChain := strings.TrimSpace(r.render.ColorChain)
+	aspectFilter := r.displayAspectFilter()
 	if r.usesLibplaceboColorspace() {
-		return joinFilters(
-			baseTimeline,
-			selectFrame,
-			r.render.ColorChain,
-			subFilter,
-			r.displayAspectFilter(),
-		)
+		return joinFilters(colorChain, subFilter, aspectFilter)
 	}
-	return joinFilters(
-		baseTimeline,
-		selectFrame,
-		subFilter,
-		r.render.ColorChain,
-		r.displayAspectFilter(),
-	)
+	return joinFilters(subFilter, colorChain, aspectFilter)
 }
 
 func (r *screenshotRunner) buildTextSubtitleFilter() string {

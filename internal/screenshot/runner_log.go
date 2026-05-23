@@ -123,6 +123,8 @@ func (r *screenshotRunner) captureScreenshot(requested, aligned float64, outputP
 }
 
 func (r *screenshotRunner) captureFrameDirect(sourcePath, coarseHMS string, fineSecond, requested, aligned float64, outputPath, outputName string) error {
+	startTime := time.Now()
+
 	args := []string{
 		"-y",
 		"-v", "error",
@@ -137,7 +139,7 @@ func (r *screenshotRunner) captureFrameDirect(sourcePath, coarseHMS string, fine
 
 	var filterChain string
 	if r.subtitle.Mode != "none" {
-		filterChain = r.buildTextSubtitleRenderChain(requested, aligned, r.buildTextSubtitleFilter())
+		filterChain = r.buildTextSubtitleFilterChain(r.buildTextSubtitleFilter())
 	} else {
 		filterChain = joinFilters(
 			strings.TrimSpace(r.render.ColorChain),
@@ -156,10 +158,17 @@ func (r *screenshotRunner) captureFrameDirect(sourcePath, coarseHMS string, fine
 
 	args = append(args, "-y", outputPath)
 
+	r.logf("[渲染] 开始渲染: %s | 滤镜: %s", outputName, filterChain)
+
 	_, stderr, err := system.RunCommand(r.ctx, r.tools.FFmpegBin, args...)
+	elapsed := time.Since(startTime)
+
 	if err != nil {
+		r.logf("[渲染] 失败: %s | 耗时=%.3fs", outputName, elapsed.Seconds())
 		return parseFFmpegError(err, stderr, filterChain, sourcePath, r.logger, outputName)
 	}
+
+	r.logf("[渲染] 完成: %s | 耗时=%.3fs", outputName, elapsed.Seconds())
 	return nil
 }
 

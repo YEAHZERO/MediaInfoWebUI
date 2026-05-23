@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"mediainfo/internal/screenshot/delivery"
 	"mediainfo/internal/screenshot/engine"
 	"mediainfo/internal/screenshot/hosting"
 )
@@ -165,6 +166,52 @@ func RunUploadWithLogs(ctx context.Context, inputPath, outputDir, variant, subti
 		logStr += strings.TrimSpace(logs.String())
 	}
 
+	if err != nil {
+		return UploadResult{Logs: logStr}, err
+	}
+
+	if len(links) == 0 {
+		return UploadResult{Logs: logStr}, errors.New("host upload completed but returned no links")
+	}
+
+	output := strings.Join(links, "\n")
+	return UploadResult{Output: output, Logs: logStr}, nil
+}
+
+func RunUploadFromDir(ctx context.Context, tempDir, hostName string, logHandlers ...LogHandler) (UploadResult, error) {
+	imagePaths, err := delivery.ListImageFiles(tempDir)
+	if err != nil {
+		return UploadResult{}, err
+	}
+	if len(imagePaths) == 0 {
+		return UploadResult{}, errors.New("no screenshots found in temp directory")
+	}
+
+	hostManager := hosting.NewManager()
+	hostManager.Register(hosting.NewPixhost())
+	hostManager.Register(hosting.NewFreeimage())
+	hostManager.Register(hosting.NewLocal())
+	hostManager.SetDefault("pixhost")
+
+	host := hostManager.Get(hostName)
+	if host == nil {
+		return UploadResult{}, errors.New("unknown image host: " + hostName)
+	}
+
+	var logs strings.Builder
+	logHandler := func(msg string) {
+		logs.WriteString(msg)
+		logs.WriteString("\n")
+		for _, h := range logHandlers {
+			if h != nil {
+				h(msg)
+			}
+		}
+	}
+
+	links, err := host.Upload(ctx, imagePaths, logHandler)
+
+	logStr := strings.TrimSpace(logs.String())
 	if err != nil {
 		return UploadResult{Logs: logStr}, err
 	}

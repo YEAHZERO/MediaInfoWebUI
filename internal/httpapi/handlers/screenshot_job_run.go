@@ -68,56 +68,55 @@ func (j *screenshotJob) run() {
 	}
 	defer os.RemoveAll(tempDir)
 
-	switch j.mode {
-	case screenshot.ModeLinks:
-		filelogger.Log(filelogger.Screenshots, "[%s] 开始截图并上传至: %s", j.id, j.host)
-		result, err := screenshot.RunUploadWithLogs(ctx, j.inputPath, tempDir, j.variant, j.subtitleMode, j.host, j.count, j.logger.LogLine)
-		if err != nil {
-			filelogger.Log(filelogger.Screenshots, "[%s] 失败: %s | 耗时=%s", j.id, err.Error(), time.Since(jobStart))
-			if result.Logs != "" {
-				filelogger.Log(filelogger.Screenshots, "[%s] 截图详情:\n%s", j.id, result.Logs)
-			}
-			if j.logger != nil {
-				j.logger.LogLine(result.Logs)
-			}
-			j.fail(err)
-			return
+	filelogger.Log(filelogger.Screenshots, "[%s] 开始截图", j.id)
+
+	result, err := screenshot.RunScriptWithLogs(ctx, j.inputPath, tempDir, j.variant, j.subtitleMode, j.count, j.logger.LogLine)
+	if err != nil {
+		filelogger.Log(filelogger.Screenshots, "[%s] 失败: %s | 耗时=%s", j.id, err.Error(), time.Since(jobStart))
+		if result.Logs != "" {
+			filelogger.Log(filelogger.Screenshots, "[%s] 截图详情:\n%s", j.id, result.Logs)
 		}
-		links := parseUploadLinks(result.Output)
-		filelogger.Log(filelogger.Screenshots, "[%s] 成功: 截图 %d 张 | 上传 %d 个链接 | 耗时=%s", j.id, j.count, len(links), time.Since(jobStart))
+		if j.logger != nil {
+			j.logger.LogLine(result.Logs)
+		}
+		j.fail(err)
+		return
+	}
+
+	zipBytes, _, zipErr := zipScreenshotsFromDir(tempDir)
+	var downloadURL string
+	if zipErr == nil {
+		token, saveErr := screenshot.SavePreparedDownload(zipBytes)
+		if saveErr == nil {
+			downloadURL = "/api/screenshots?token=" + token
+		}
+	}
+
+	var uploadLinks string
+	var linkItems []transport.ImageLinkItem
+	if j.host != "" {
+		filelogger.Log(filelogger.Screenshots, "[%s] 开始上传至: %s", j.id, j.host)
+		uploadResult, uploadErr := screenshot.RunUploadFromDir(ctx, tempDir, j.host, j.logger.LogLine)
+		if uploadErr != nil {
+			filelogger.Log(filelogger.Screenshots, "[%s] 上传失败: %s", j.id, uploadErr.Error())
+			if uploadResult.Logs != "" && j.logger != nil {
+				j.logger.LogLine(uploadResult.Logs)
+			}
+		} else {
+			uploadLinks = uploadResult.Output
+			linkItems = parseUploadLinks(uploadLinks)
+			filelogger.Log(filelogger.Screenshots, "[%s] 上传成功: %d 个链接", j.id, len(linkItems))
+		}
 		if result.Logs != "" && j.logger != nil {
 			j.logger.LogLine(result.Logs)
 		}
-		var downloadURL string
-		zipBytes, _, zipErr := zipScreenshotsFromDir(tempDir)
-		if zipErr == nil {
-			token, saveErr := screenshot.SavePreparedDownload(zipBytes)
-			if saveErr == nil {
-				downloadURL = "/api/screenshots?token=" + token
-			}
-		}
-		linkItems := parseUploadLinks(result.Output)
-		j.succeed(result.Output, downloadURL, linkItems, nil, nil)
-	default:
-		filelogger.Log(filelogger.Screenshots, "[%s] 开始截图并打包下载", j.id)
-		downloadURL, logs, _, err := prepareScreenshotZipDownload(ctx, j.inputPath, tempDir, j.variant, j.subtitleMode, j.count, j.logger.LogLine)
-		if err != nil {
-			filelogger.Log(filelogger.Screenshots, "[%s] 失败: %s | 耗时=%s", j.id, err.Error(), time.Since(jobStart))
-			if logs != "" {
-				filelogger.Log(filelogger.Screenshots, "[%s] 截图详情:\n%s", j.id, logs)
-			}
-			if logs != "" && j.logger != nil {
-				j.logger.LogLine(logs)
-			}
-			j.fail(err)
-			return
-		}
-		filelogger.Log(filelogger.Screenshots, "[%s] 成功: 截图 %d 张 | 打包完成 | 耗时=%s", j.id, j.count, time.Since(jobStart))
-		if logs != "" && j.logger != nil {
-			j.logger.LogLine(logs)
-		}
-		j.succeed("", downloadURL, nil, nil, nil)
 	}
+
+	filelogger.Log(filelogger.Screenshots, "[%s] 成功: 截图 %d 张 | 耗时=%s", j.id, j.count, time.Since(jobStart))
+	if result.Logs != "" && j.logger != nil {
+		j.logger.LogLine(result.Logs)
+	}
+	j.succeed(uploadLinks, downloadURL, linkItems, nil, nil)
 }
 
 func parseUploadLinks(output string) []transport.ImageLinkItem {
