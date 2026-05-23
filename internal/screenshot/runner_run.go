@@ -20,6 +20,7 @@ type screenshotRunState struct {
 }
 
 type screenshotCapturePlan struct {
+	requested  float64
 	aligned    float64
 	outputName string
 	outputPath string
@@ -104,6 +105,7 @@ func (r *screenshotRunner) prepareScreenshotCapture(requested float64, state *sc
 	r.logProgress("截图开始", current, state.totalShots, fmt.Sprintf("正在渲染第 %d/%d 张截图：%s", current, state.totalShots, outputName))
 
 	return screenshotCapturePlan{
+		requested:  requested,
 		aligned:    aligned,
 		outputName: outputName,
 		outputPath: outputPath,
@@ -131,7 +133,7 @@ func (r *screenshotRunner) resolveAlignedScreenshotTime(requested float64, state
 func (r *screenshotRunner) capturePreparedScreenshot(plan screenshotCapturePlan, state *screenshotRunState) {
 	defer r.activeShot.Reset()
 
-	if err := r.captureScreenshot(plan.aligned, plan.outputPath); err != nil {
+	if err := r.captureScreenshot(plan.requested, plan.aligned, plan.outputPath, plan.outputName); err != nil {
 		processed := state.markFailed(plan.outputName, err)
 		r.logProgress("截图完成", processed, state.totalShots, fmt.Sprintf("第 %d/%d 张截图失败：%s", processed, state.totalShots, plan.outputName))
 		return

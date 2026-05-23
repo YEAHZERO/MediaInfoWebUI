@@ -10,6 +10,7 @@ import (
 
 	screenshotprogress "mediainfo/internal/screenshot/progress"
 	screenshottimestamps "mediainfo/internal/screenshot/timestamps"
+	screenshotruntime "mediainfo/internal/screenshot/runtime"
 	"mediainfo/internal/system"
 	"mediainfo/internal/taskprogress"
 )
@@ -106,7 +107,7 @@ func (r *screenshotRunner) clampToDuration(value float64) float64 {
 	return value
 }
 
-func (r *screenshotRunner) captureScreenshot(aligned float64, outputPath string) error {
+func (r *screenshotRunner) captureScreenshot(requested, aligned float64, outputPath, outputName string) error {
 	sourcePath := r.sourcePath
 	if r.subtitleState.DVDResult != nil && r.subtitleState.DVDResult.SelectedVOBPath != "" {
 		sourcePath = r.subtitleState.DVDResult.SelectedVOBPath
@@ -116,12 +117,12 @@ func (r *screenshotRunner) captureScreenshot(aligned float64, outputPath string)
 	_, fineSecond, coarseHMS := r.splitCaptureTimeline(aligned, coarseBack)
 
 	if r.subtitle.Mode != "none" && r.isSupportedBitmapSubtitle() {
-		return r.captureBitmapScreenshot(sourcePath, coarseHMS, fineSecond, outputPath)
+		return r.captureBitmapScreenshot(sourcePath, coarseHMS, fineSecond, requested, aligned, outputPath, outputName)
 	}
-	return r.captureFrameDirect(sourcePath, coarseHMS, fineSecond, outputPath)
+	return r.captureFrameDirect(sourcePath, coarseHMS, fineSecond, requested, aligned, outputPath, outputName)
 }
 
-func (r *screenshotRunner) captureFrameDirect(sourcePath, coarseHMS string, fineSecond float64, outputPath string) error {
+func (r *screenshotRunner) captureFrameDirect(sourcePath, coarseHMS string, fineSecond, requested, aligned float64, outputPath, outputName string) error {
 	args := []string{
 		"-y",
 		"-v", "error",
@@ -136,11 +137,15 @@ func (r *screenshotRunner) captureFrameDirect(sourcePath, coarseHMS string, fine
 		"-an",
 	}
 
-	filterChain := joinFilters(
-		r.buildTextSubtitleFilter(),
-		strings.TrimSpace(r.render.ColorChain),
-		r.displayAspectFilter(),
-	)
+	var filterChain string
+	if r.subtitle.Mode != "none" {
+		filterChain = r.buildTextSubtitleRenderChain(requested, aligned, r.buildTextSubtitleFilter())
+	} else {
+		filterChain = joinFilters(
+			strings.TrimSpace(r.render.ColorChain),
+			r.displayAspectFilter(),
+		)
+	}
 	if filterChain != "" {
 		args = append(args, "-vf", filterChain)
 	}
@@ -155,23 +160,36 @@ func (r *screenshotRunner) captureFrameDirect(sourcePath, coarseHMS string, fine
 
 	_, stderr, err := system.RunCommand(r.ctx, r.tools.FFmpegBin, args...)
 	if err != nil {
-		return parseFFmpegError(err, stderr, filterChain, sourcePath)
+		return parseFFmpegError(err, stderr, filterChain, sourcePath, r.logger, outputName)
 	}
 	return nil
 }
 
-func parseFFmpegError(err error, stderr, filterChain, sourcePath string) error {
+func parseFFmpegError(err error, stderr, filterChain, sourcePath string, logger screenshotruntime.Logger, outputName string) error {
 	msg := system.BestErrorMessage(err, stderr, "")
-	return &ffmpegCaptureError{message: msg, filterChain: filterChain, source: sourcePath}
+	if msg != "" {
+		logger.Addf("[FFmpeg 错误] %s", msg)
+	}
+	logger.Addf("[FFmpeg 调试] 滤镜链: %s", filterChain)
+	return &ffmpegCaptureError{
+		message:     msg,
+		filterChain: filterChain,
+		source:      sourcePath,
+		outputName:  outputName,
+	}
 }
 
 type ffmpegCaptureError struct {
 	message     string
 	filterChain string
 	source      string
+	outputName  string
 }
 
 func (e *ffmpegCaptureError) Error() string {
+	if e.message != "" {
+		return fmt.Sprintf("ffmpeg 截图失败: %s", e.message)
+	}
 	return "ffmpeg 截图失败"
 }
 
@@ -179,7 +197,7 @@ func (e *ffmpegCaptureError) Unwrap() string {
 	return e.message
 }
 
-func (r *screenshotRunner) captureBitmapScreenshot(sourcePath, coarseHMS string, fineSecond float64, outputPath string) error {
+func (r *screenshotRunner) captureBitmapScreenshot(sourcePath, coarseHMS string, fineSecond, requested, aligned float64, outputPath, outputName string) error {
 	overlayDir, err := os.MkdirTemp("", "screenshot-bitmap-overlay-*")
 	if err != nil {
 		return err
@@ -187,7 +205,7 @@ func (r *screenshotRunner) captureBitmapScreenshot(sourcePath, coarseHMS string,
 	defer os.RemoveAll(overlayDir)
 
 	baseFrame := filepath.Join(overlayDir, "base.png")
-	if err := r.captureFrameDirect(sourcePath, coarseHMS, fineSecond, baseFrame); err != nil {
+	if err := r.captureFrameDirect(sourcePath, coarseHMS, fineSecond, requested, aligned, baseFrame, outputName); err != nil {
 		return err
 	}
 
@@ -214,7 +232,12 @@ func (r *screenshotRunner) captureBitmapScreenshot(sourcePath, coarseHMS string,
 
 	_, stderr, err := system.RunCommand(r.ctx, r.tools.FFmpegBin, args...)
 	if err != nil {
-		return fmt.Errorf("ffmpeg 位图截图覆盖失败: %s", system.BestErrorMessage(err, stderr, ""))
+		msg := system.BestErrorMessage(err, stderr, "")
+		if msg != "" {
+			r.logf("[FFmpeg 位图错误] %s", msg)
+		}
+		r.logf("[FFmpeg 位图调试] 滤镜链: %s", filterComplex)
+		return fmt.Errorf("ffmpeg 位图截图覆盖失败: %s", msg)
 	}
 	return nil
 }
